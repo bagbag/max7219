@@ -40,7 +40,14 @@ pub enum DecodeMode
 }
 
 // raised if any of the GPIO pins fails an operation
+#[derive(Debug)]
 pub struct PinError;
+
+impl From<core::convert::Infallible> for PinError {
+    fn from(_: core::convert::Infallible) -> Self {
+        PinError {}
+    }
+}
 
 pub struct MAX7219<DATA, CS, CLK>
 {
@@ -55,7 +62,7 @@ impl<DATA, CS, CLK> MAX7219<DATA, CS, CLK>
 where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
       PinError: core::convert::From<<DATA as embedded_hal::digital::v2::OutputPin>::Error>,
       PinError: core::convert::From<<CS as embedded_hal::digital::v2::OutputPin>::Error>,
-      PinError: core::convert::From<<CLK as embedded_hal::digital::v2::OutputPin>::Error>
+      PinError: core::convert::From<<CLK as embedded_hal::digital::v2::OutputPin>::Error>,
 {
 
     pub fn new(devices: u8, data: DATA, cs: CS, clk: CLK) -> Result<Self, PinError> {
@@ -166,7 +173,7 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
 
     pub fn test(&mut self, addr: u8, is_on: bool) -> Result<(), PinError> {
         if is_on {
-            self.write_raw(addr, 0x01, 0x01)
+            self.write_raw(addr, 0x0F, 0x01)
         } else {
             self.write_raw(addr, 0x01, 0x00)
         }
