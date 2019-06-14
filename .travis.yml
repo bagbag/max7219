@@ -8,17 +8,19 @@ matrix:
   include:
     # Linux
     - env: TARGET=x86_64-unknown-linux-gnu
-      rust: nightly
+      rust: stable
 
     # Bare metal
+    - env: TARGET=riscv32imac-unknown-none-elf
+      rust: stable
     - env: TARGET=thumbv6m-none-eabi
-      rust: nightly
+      rust: stable
     - env: TARGET=thumbv7m-none-eabi
-      rust: nightly
+      rust: stable
     - env: TARGET=thumbv7em-none-eabi
-      rust: nightly
+      rust: stable
     - env: TARGET=thumbv7em-none-eabihf
-      rust: nightly
+      rust: stable
 
 before_install:
   - set -e
