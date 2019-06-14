@@ -2,7 +2,7 @@
 
 > A platform agnostic driver to interface with the MAX7219 (LED display driver)
 
-[![Build Status](https://travis-ci.org/maikelwever/max7219.svg?branch=master)](https://travis-ci.org/maikelwever/max7219)
+[![Build Status](https://travis-ci.org/maikelwever/max7219.svg?branch=master)](https://travis-ci.org/almindor/max7219)
 
 ## What works
 
@@ -10,64 +10,64 @@
 - Basic commands for setting LEDs on/off.
 - Chaining support (max 8 devices)
 
-## TODO
-
-- [ ] Using hardware SPI
-
 ## Example
 
-Here is a simple example for using the MAX7219 on a stm32f103xx device with stm32f103xx_hal:
+Here is a simple example for using the MAX7219 on a hifive1-revb device with e310x_hal:
 ```rust
-#![deny(unsafe_code)]
 #![no_std]
+#![no_main]
 
-extern crate stm32f103xx_hal as hal;
-extern crate max7219;
+extern crate panic_halt;
 
-use hal::stm32f103xx;
-use hal::prelude::*;
+use riscv_rt::entry;
+use hifive1::hal::prelude::*;
+use hifive1::hal::stdout::*;
+use hifive1::hal::serial::Serial;
+use hifive1::hal::e310x::Peripherals;
+use max7219::*;
 
-use max7219::{MAX7219, Command, DecodeMode};
+#[entry]
+fn main() -> ! {
+    let p = Peripherals::take().unwrap();
 
+    // Configure clocks
+    let clocks = hifive1::clock::configure(p.PRCI, p.AONCLK, 320.mhz().into());
 
-fn main() {
-    let dp = stm32f103xx::Peripherals::take().unwrap();
+    // Configure SPI pins
+    let mut gpio = p.GPIO0.split();
 
-    let mut flash = dp.FLASH.constrain();
-    let mut rcc = dp.RCC.constrain();
+    let (tx, rx) = hifive1::tx_rx(
+        gpio.pin17,
+        gpio.pin16,
+        &mut gpio.out_xor,
+        &mut gpio.iof_sel,
+        &mut gpio.iof_en
+    );
 
-    let mut gpioa = dp.GPIOA.split(&mut rcc.apb2);
+    let data = gpio.pin3.into_output(&mut gpio.output_en, &mut gpio.drive,
+                                     &mut gpio.out_xor, &mut gpio.iof_en);
+    let sck = gpio.pin5.into_output(&mut gpio.output_en, &mut gpio.drive,
+                                    &mut gpio.out_xor, &mut gpio.iof_en);
+    let cs = gpio.pin2.into_output(&mut gpio.output_en, &mut gpio.drive,
+                                   &mut gpio.out_xor, &mut gpio.iof_en);
 
-    let _clocks = rcc.cfgr
-        .sysclk(64.mhz())
-        .pclk1(32.mhz())
-        .freeze(&mut flash.acr);
+    let mut display = MAX7219::new(1, data, cs, sck).unwrap();
 
-    let max_data = gpioa.pa7.into_push_pull_output(&mut gpioa.crl);
-    let max_clk = gpioa.pa5.into_push_pull_output(&mut gpioa.crl);
-    let max_cs = gpioa.pa4.into_push_pull_output(&mut gpioa.crl);
+    // make sure to wake the display up
+    display.power_on().unwrap();
+    // write given string, see function doc for permitted input in this mode
+    display.write_bcd(0, "-234help").unwrap();
+    // set display intensity lower
+    display.set_intensity(0, 0x1).unwrap();
 
-    let number_of_devices: u8 = 1;
-    let mut max7219 = MAX7219::new(number_of_devices, max_data, max_cs, max_clk);
-    max7219.power_on();
-    max7219.set_intensity(0, 8);
-
-    // For a 7-segment display, optionally set a decode mode:
-    // max7219.set_decode_mode(DecodeMode::CodeBDigits7_0);
-    // You can add a dot to any number with an OR operation:
-    // max7219.write_raw(0x01, 0x01 | 0x80);
-    // Numbers 0-9 are written using their raw values. 0x0F is empty
-
-    max7219.write_raw(0, 0x01, 1);
-    max7219.write_raw(0, 0x02, 0x02);
-    max7219.write_raw(0, 0x03, 3);
-    max7219.write_data(0, Command::Digit4, 0x04);
-    max7219.write_raw(0, 0x05, 0x05);
-    max7219.write_raw(0, 0x06, 0x06 | 0x80);
-    max7219.write_raw(0, 0x07, 0x05);
-    max7219.write_raw(0, 0x08, 0x8F);
+    loop {}
 }
 ```
+
+## Credits
+
+Original work by [Maikel Wever](https://github.com/maikelwever/max7219).
+Adapted to latest embedded-hal and documented by Ales Katona.
 
 ## License
 
