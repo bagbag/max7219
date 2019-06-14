@@ -2,7 +2,7 @@
 
 > A platform agnostic driver to interface with the MAX7219 (LED display driver)
 
-[![Build Status](https://travis-ci.org/maikelwever/max7219.svg?branch=master)](https://travis-ci.org/almindor/max7219)
+[![Build Status](https://travis-ci.org/almindor/max7219.svg?branch=master)](https://travis-ci.org/almindor/max7219)
 
 ## What works
 
