@@ -13,9 +13,13 @@ extern crate embedded_hal;
 
 use embedded_hal::digital::v2::OutputPin;
 
-/// 
+/// Maximum number of displays connected in series supported by this lib.
+const MAX_DISPLAYS: usize = 8;
+
+/// Digits per display
+const MAX_DIGITS: u8 = 8;
+
 /// Possible command register values on the display chip.
-/// 
 pub enum Command
 {
     Noop = 0x00,
@@ -34,9 +38,7 @@ pub enum Command
     DisplayTest = 0x0F
 }
 
-/// 
 /// Decode modes for BCD encoded input.
-/// 
 pub enum DecodeMode
 {
     NoDecode = 0x00,
@@ -46,11 +48,11 @@ pub enum DecodeMode
 }
 
 /// 
-/// Translate alphanumeric characters into BCD
+/// Translate alphanumeric bytes into BCD
 /// encoded bytes expected by the display chip.
 /// 
-fn bcd_char(c: char) -> u8 {
-    match c {
+fn bcd_byte(b: u8) -> u8 {
+    match b as char {
         '-' => 0b00001010, // - without .
         'e' => 0b00001011, // H without .
         'E' => 0b10001011, // H with .
@@ -60,7 +62,7 @@ fn bcd_char(c: char) -> u8 {
         'L' => 0b10001101, // L with .
         'p' => 0b00001110, // L without .
         'P' => 0b10001110, // L with .
-        _ => c as u8,
+        _ => b,
     }
 }
 
@@ -88,8 +90,8 @@ pub struct MAX7219<DATA, CS, CLK>
     data: DATA,
     cs: CS,
     clk: CLK,
-    devices: u8,
-    buffer: [u8; 8]
+    devices: usize,
+    buffer: [u8; MAX_DISPLAYS],
 }
 
 impl<DATA, CS, CLK> MAX7219<DATA, CS, CLK>
@@ -113,17 +115,17 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
     /// 
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     /// 
-    pub fn new(devices: u8, data: DATA, cs: CS, clk: CLK) -> Result<Self, PinError> {
+    pub fn new(devices: usize, data: DATA, cs: CS, clk: CLK) -> Result<Self, PinError> {
 
         let mut num_devices = devices;
-        if num_devices > 8 {
-            num_devices = 8;
+        if num_devices > MAX_DISPLAYS {
+            num_devices = MAX_DISPLAYS;
         }
 
         let mut max7219 = MAX7219 {
             data, cs, clk, 
             devices: num_devices, 
-            buffer: [0; 8]
+            buffer: [0; MAX_DISPLAYS]
         };
 
         max7219.init()?;
@@ -171,7 +173,7 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
     /// 
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     /// 
-    pub fn clear_display(&mut self, addr: u8) -> Result<(), PinError> {
+    pub fn clear_display(&mut self, addr: usize) -> Result<(), PinError> {
         for i in 1..9 {
             self.write_raw(addr, i, 0x00)?;
         }
@@ -191,7 +193,7 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
     /// 
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     /// 
-    pub fn set_intensity(&mut self, addr: u8, intensity: u8) -> Result<(), PinError> {
+    pub fn set_intensity(&mut self, addr: usize, intensity: u8) -> Result<(), PinError> {
         self.write_data(addr, Command::Intensity, intensity)
     }
 
@@ -207,7 +209,7 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
     /// 
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     /// 
-    pub fn set_decode_mode(&mut self, addr: u8, mode: DecodeMode) -> Result<(), PinError> {
+    pub fn set_decode_mode(&mut self, addr: usize, mode: DecodeMode) -> Result<(), PinError> {
         self.write_data(addr, Command::DecodeMode, mode as u8)
     }
 
@@ -224,7 +226,7 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
     /// 
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     /// 
-    pub fn write_data(&mut self, addr: u8, command: Command, data: u8) -> Result<(), PinError> {
+    pub fn write_data(&mut self, addr: usize, command: Command, data: u8) -> Result<(), PinError> {
         self.write_raw(addr, command as u8, data)
     }
 
@@ -233,24 +235,30 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
     /// 
     /// # Arguments
     /// 
-    /// * `addr` - display to address as connected in series
+    /// * `addrs` - list of devices over which to write the total bcd string (left to right)
     /// * `bcd` - the bcd encoded string slice consisting of [0-9,-,E,L,H,P] where upper case input for alphabetic characters results in dot being set
     ///
     /// # Errors
     /// 
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     /// 
-    pub fn write_bcd(&mut self, addr: u8, bcd: &str) -> Result<(), PinError> {
+    pub fn write_bcd(&mut self, addr: usize, bcd: &[u8]) -> Result<(), PinError> {
         self.set_decode_mode(0, DecodeMode::CodeBDigits7_0)?;
 
-        let mut digit: u8 = 8;
-        for c in bcd.chars() {
-            self.write_raw(addr, digit, bcd_char(c))?;
+        let mut digit: u8 = MAX_DIGITS;
+        for b in bcd {
+            self.write_raw(addr, digit, bcd_byte(*b))?;
 
             digit = digit - 1;
             if digit == 0 {
                 return Ok(())
             }
+        }
+
+        // empty the rest
+        while digit > 0 {
+            self.write_raw(addr, digit, 0x00)?;
+            digit = digit - 1;
         }
 
         Ok(())
@@ -268,7 +276,7 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
     /// 
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     /// 
-    pub fn test(&mut self, addr: u8, is_on: bool) -> Result<(), PinError> {
+    pub fn test(&mut self, addr: usize, is_on: bool) -> Result<(), PinError> {
         if is_on {
             self.write_data(addr, Command::DisplayTest, 0x01)
         } else {
@@ -278,31 +286,31 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
 
     fn init(&mut self) -> Result<(), PinError> {
         for i in 0..self.devices {
-            self.test(i, false)?;
-            self.write_data(i, Command::ScanLimit, 0x07)?;
-            self.set_decode_mode(i, DecodeMode::NoDecode)?;
-            self.clear_display(i)?;
+            self.test(i, false)?; // turn testmode off
+            self.write_data(i, Command::ScanLimit, 0x07)?; // set scanlimit
+            self.set_decode_mode(i, DecodeMode::NoDecode)?; // direct decode
+            self.clear_display(i)?; // clear all digits
         }
-        self.power_off()?;
+        self.power_off()?; // power off
 
         Ok(())
     }
 
     fn empty_buffer(&mut self) {
-        self.buffer = [0; 8];
+        self.buffer = [0; MAX_DISPLAYS];
     }
 
-    fn write_raw(&mut self, addr: u8, header: u8, data: u8) -> Result<(), PinError> {
+    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), PinError> {
         let offset = addr * 2;
         let max_bytes = self.devices * 2;
         self.empty_buffer();
 
-        self.buffer[offset as usize] = header;
-        self.buffer[offset as usize + 1] = data;
+        self.buffer[offset] = header;
+        self.buffer[offset + 1] = data;
 
         self.cs.set_low()?;
         for i in 0..max_bytes {
-            let buffer_data = self.buffer[i as usize];
+            let buffer_data = self.buffer[i];
             self.shift_out(buffer_data)?;
         }
         self.cs.set_high()?;

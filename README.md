@@ -29,18 +29,10 @@ fn main() -> ! {
     let p = Peripherals::take().unwrap();
 
     // Configure clocks
-    let clocks = hifive1::clock::configure(p.PRCI, p.AONCLK, 320.mhz().into());
+    hifive1::clock::configure(p.PRCI, p.AONCLK, 320.mhz().into());
 
     // Configure SPI pins
     let mut gpio = p.GPIO0.split();
-
-    let (tx, rx) = hifive1::tx_rx(
-        gpio.pin17,
-        gpio.pin16,
-        &mut gpio.out_xor,
-        &mut gpio.iof_sel,
-        &mut gpio.iof_en
-    );
 
     let data = gpio.pin3.into_output(&mut gpio.output_en, &mut gpio.drive,
                                      &mut gpio.out_xor, &mut gpio.iof_en);
@@ -54,7 +46,7 @@ fn main() -> ! {
     // make sure to wake the display up
     display.power_on().unwrap();
     // write given string, see function doc for permitted input in this mode
-    display.write_bcd(0, "-234help").unwrap();
+    display.write_bcd(0, b"-234help").unwrap();
     // set display intensity lower
     display.set_intensity(0, 0x1).unwrap();
 
