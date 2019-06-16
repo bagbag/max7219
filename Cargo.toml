@@ -1,13 +1,14 @@
 [package]
 authors = ["Maikel Wever <maikel@maikelwever.nl>", "Ales Katona <ales@katona.me>"]
 categories = ["embedded", "hardware-support", "no-std"]
+readme = "README.md"
 description = "A platform agnostic driver to interface the MAX7219 (LED driver)"
 documentation = "https://docs.rs/max7219"
 keywords = ["embedded-hal-driver", "max7219", "ledcontrol"]
 license = "MIT"
 name = "max7219"
-repository = "https://github.com/maikelwever/max7219"
-version = "0.1.0"
+repository = "https://github.com/almindor/max7219"
+version = "0.1.1"
 
 [dependencies]
 embedded-hal = "0.2.3"
