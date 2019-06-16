@@ -17,9 +17,10 @@ use embedded_hal::digital::v2::OutputPin;
 const MAX_DISPLAYS: usize = 8;
 
 /// Digits per display
-const MAX_DIGITS: u8 = 8;
+const MAX_DIGITS: usize = 8;
 
 /// Possible command register values on the display chip.
+#[derive(Clone, Copy)]
 pub enum Command
 {
     Noop = 0x00,
@@ -39,6 +40,7 @@ pub enum Command
 }
 
 /// Decode modes for BCD encoded input.
+#[derive(Copy, Clone)]
 pub enum DecodeMode
 {
     NoDecode = 0x00,
@@ -48,29 +50,76 @@ pub enum DecodeMode
 }
 
 /// 
-/// Translate alphanumeric bytes into BCD
+/// Translate alphanumeric ASCII bytes into BCD
 /// encoded bytes expected by the display chip.
 /// 
 fn bcd_byte(b: u8) -> u8 {
     match b as char {
-        ' ' => 0b00001111, // "blank"
-        '-' => 0b00001010, // - without .
-        'e' => 0b00001011, // H without .
-        'E' => 0b10001011, // H with .
-        'h' => 0b00001100, // H without .
-        'H' => 0b10001100, // H with .
-        'l' => 0b00001101, // L without .
-        'L' => 0b10001101, // L with .
-        'p' => 0b00001110, // L without .
-        'P' => 0b10001110, // L with .
-        _ => b,
+        ' ' => 0b00001111,        // "blank"
+        '-' => 0b00001010,        // - without .
+        'e' => 0b00001011,        // E without .
+        'E' => 0b10001011,        // E with .
+        'h' => 0b00001100,        // H without .
+        'H' => 0b10001100,        // H with .
+        'l' => 0b00001101,        // L without .
+        'L' => 0b10001101,        // L with .
+        'p' => 0b00001110,        // L without .
+        'P' => 0b10001110,        // L with .
+        _   => b,
+    }
+}
+
+/// 
+/// Translate alphanumeric ASCII bytes into segment set bytes
+/// 
+fn ssb_byte(b: u8) -> u8 {
+    match b as char {
+        ' ' => 0b00000000,        // "blank"
+        '-' => 0b00000001,        // -
+        '0' => 0b01111110,
+        '1' => 0b00110000,
+        '2' => 0b01101101,
+        '3' => 0b01111001,
+        '4' => 0b00110011,
+        '5' => 0b01011011,
+        '6' => 0b01011111,
+        '7' => 0b01110000,
+        '8' => 0b01111111,
+        '9' => 0b01111011,
+        'a' | 'A' => 0b01110111,
+        'b'       => 0b00011111,
+        'c' | 'C' => 0b01001110,
+        'd'       => 0b00111101,
+        'e' | 'E' => 0b01001111,
+        'f' | 'F' => 0b01000111,
+        'g' | 'G' => 0b01011110,
+        'h' | 'H' => 0b00110111,
+        'i' | 'I' => 0b00110000,
+        'j' | 'J' => 0b00111100,
+        // K undoable
+        'l' | 'L' => 0b00001110,
+        // M undoable
+        // N undoable
+        'o' | 'O' => 0b01111110,
+        'p' | 'P' => 0b01100111,
+        'q'       => 0b01110011,
+        // R undoable
+        's' | 'S' => 0b01011011,
+        // T undoable
+        'u' | 'U' => 0b00111110,
+        // V undoable
+        // W undoable
+        // X undoable
+        // Y undoable
+        // Z undoable
+        _         => 0b11100101,        // ?
     }
 }
 
 ///
 /// Error raised in case there was a PIN interaction
 /// error during communication with the MAX7219 chip.
-/// 
+///
 #[derive(Debug)]
 pub struct PinError;
 
@@ -85,7 +134,7 @@ impl From<core::convert::Infallible> for PinError {
 /// chip for segmented displays. Each display can be
 /// connected in series with another and controlled via
 /// a single connection.
-/// 
+///
 pub struct MAX7219<DATA, CS, CLK>
 {
     data: DATA,
@@ -93,6 +142,7 @@ pub struct MAX7219<DATA, CS, CLK>
     clk: CLK,
     devices: usize,
     buffer: [u8; MAX_DISPLAYS],
+    decode_mode: DecodeMode,
 }
 
 impl<DATA, CS, CLK> MAX7219<DATA, CS, CLK>
@@ -126,7 +176,8 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
         let mut max7219 = MAX7219 {
             data, cs, clk, 
             devices: num_devices, 
-            buffer: [0; MAX_DISPLAYS]
+            buffer: [0; MAX_DISPLAYS],
+            decode_mode: DecodeMode::NoDecode,
         };
 
         max7219.init()?;
@@ -211,6 +262,7 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     /// 
     pub fn set_decode_mode(&mut self, addr: usize, mode: DecodeMode) -> Result<(), PinError> {
+        self.decode_mode = mode; // store what we set
         self.write_data(addr, Command::DecodeMode, mode as u8)
     }
 
@@ -232,35 +284,59 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
     }
 
     ///
-    /// Writes BCD encoded string to the display
+    /// Writes byte string to the display
     /// 
     /// # Arguments
     /// 
     /// * `addrs` - list of devices over which to write the total bcd string (left to right)
-    /// * `bcd` - the bcd encoded string slice consisting of [0-9,-,E,L,H,P] where upper case input for alphabetic characters results in dot being set
+    /// * `bcd` - the byte string to send 8 bytes long. Unknown characters result in question mark.
     ///
     /// # Errors
     /// 
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     /// 
-    pub fn write_bcd(&mut self, addr: usize, bcd: &[u8;8]) -> Result<(), PinError> {
+    pub fn write_str(&mut self, addr: usize, bcd: &[u8;MAX_DIGITS]) -> Result<(), PinError> {
+        let prev_dm = self.decode_mode;
+        self.set_decode_mode(0, DecodeMode::NoDecode)?;
+
+        let mut digit: u8 = MAX_DIGITS as u8;
+        for b in bcd {
+            self.write_raw(addr, digit, ssb_byte(*b))?;
+
+            digit = digit - 1;
+        }
+
+        self.set_decode_mode(0, prev_dm)?;
+
+        Ok(())
+    }
+
+    ///
+    /// Writes BCD encoded string to the display
+    /// 
+    /// # Arguments
+    /// 
+    /// * `addrs` - list of devices over which to write the total bcd string (left to right)
+    /// * `bcd` - the bcd encoded string slice consisting of [0-9,-,E,L,H,P]
+    /// where upper case input for alphabetic characters results in dot being set.
+    /// Length of string is always 8 bytes, use spaces for blanking.
+    ///
+    /// # Errors
+    /// 
+    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    /// 
+    pub fn write_bcd(&mut self, addr: usize, bcd: &[u8;MAX_DIGITS]) -> Result<(), PinError> {
+        let prev_dm = self.decode_mode;
         self.set_decode_mode(0, DecodeMode::CodeBDigits7_0)?;
 
-        let mut digit: u8 = MAX_DIGITS;
+        let mut digit: u8 = MAX_DIGITS as u8;
         for b in bcd {
             self.write_raw(addr, digit, bcd_byte(*b))?;
 
             digit = digit - 1;
-            if digit == 0 {
-                return Ok(())
-            }
         }
 
-        // empty the rest
-        while digit > 0 {
-            self.write_raw(addr, digit, 0x00)?;
-            digit = digit - 1;
-        }
+        self.set_decode_mode(0, prev_dm)?;
 
         Ok(())
     }

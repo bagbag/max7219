@@ -45,8 +45,8 @@ fn main() -> ! {
 
     // make sure to wake the display up
     display.power_on().unwrap();
-    // write given string, see function doc for permitted input in this mode
-    display.write_bcd(0, b"-234help").unwrap();
+    // write given octet of ASCII characters
+    display.write_str(0, b"pls help").unwrap();
     // set display intensity lower
     display.set_intensity(0, 0x1).unwrap();
 
