@@ -53,6 +53,7 @@ pub enum DecodeMode
 /// 
 fn bcd_byte(b: u8) -> u8 {
     match b as char {
+        ' ' => 0b00001111, // "blank"
         '-' => 0b00001010, // - without .
         'e' => 0b00001011, // H without .
         'E' => 0b10001011, // H with .
@@ -242,7 +243,7 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
     /// 
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     /// 
-    pub fn write_bcd(&mut self, addr: usize, bcd: &[u8]) -> Result<(), PinError> {
+    pub fn write_bcd(&mut self, addr: usize, bcd: &[u8;8]) -> Result<(), PinError> {
         self.set_decode_mode(0, DecodeMode::CodeBDigits7_0)?;
 
         let mut digit: u8 = MAX_DIGITS;
