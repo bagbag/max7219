@@ -45,8 +45,8 @@ fn main() -> ! {
 
     // make sure to wake the display up
     display.power_on().unwrap();
-    // write given octet of ASCII characters
-    display.write_str(0, b"pls help").unwrap();
+    // write given octet of ASCII characters with dots specified by 3rd param bits
+    display.write_str(0, b"pls help", 0b00100000).unwrap();
     // set display intensity lower
     display.set_intensity(0, 0x1).unwrap();
 

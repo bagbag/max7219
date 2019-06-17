@@ -72,9 +72,10 @@ fn bcd_byte(b: u8) -> u8 {
 /// 
 /// Translate alphanumeric ASCII bytes into segment set bytes
 /// 
-fn ssb_byte(b: u8) -> u8 {
-    match b as char {
+fn ssb_byte(b: u8, dot: bool) -> u8 {
+    let mut result = match b as char {
         ' ' => 0b00000000,        // "blank"
+        '.' => 0b10000000,
         '-' => 0b00000001,        // -
         '0' => 0b01111110,
         '1' => 0b00110000,
@@ -113,7 +114,13 @@ fn ssb_byte(b: u8) -> u8 {
         // Y undoable
         // Z undoable
         _         => 0b11100101,        // ?
+    };
+
+    if dot {
+        result = result | 0b10000000; // turn "." on
     }
+
+    result
 }
 
 ///
@@ -289,19 +296,23 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
     /// # Arguments
     /// 
     /// * `addrs` - list of devices over which to write the total bcd string (left to right)
-    /// * `bcd` - the byte string to send 8 bytes long. Unknown characters result in question mark.
+    /// * `string` - the byte string to send 8 bytes long. Unknown characters result in question mark.
+    /// * `dots` - u8 bit array specifying where to put dots in the string (1 = dot, 0 = not)
     ///
     /// # Errors
     /// 
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     /// 
-    pub fn write_str(&mut self, addr: usize, bcd: &[u8;MAX_DIGITS]) -> Result<(), PinError> {
+    pub fn write_str(&mut self, addr: usize, string: &[u8;MAX_DIGITS], dots: u8) -> Result<(), PinError> {
         let prev_dm = self.decode_mode;
         self.set_decode_mode(0, DecodeMode::NoDecode)?;
 
         let mut digit: u8 = MAX_DIGITS as u8;
-        for b in bcd {
-            self.write_raw(addr, digit, ssb_byte(*b))?;
+        let mut dot_product: u8 = 0b10000000;
+        for b in string {
+            let dot = (dots & dot_product) > 0;
+            dot_product = dot_product >> 1;
+            self.write_raw(addr, digit, ssb_byte(*b, dot))?;
 
             digit = digit - 1;
         }
