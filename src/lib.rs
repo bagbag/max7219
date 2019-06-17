@@ -12,6 +12,7 @@
 extern crate embedded_hal;
 
 use embedded_hal::digital::v2::OutputPin;
+use embedded_hal::blocking::spi::Write;
 
 /// Maximum number of displays connected in series supported by this lib.
 const MAX_DISPLAYS: usize = 8;
@@ -136,6 +137,12 @@ impl From<core::convert::Infallible> for PinError {
     }
 }
 
+impl From<()> for PinError {
+    fn from(_: ()) -> Self {
+        PinError {}
+    }
+}
+
 /// Describes the interface used to connect to the MX7219
 pub trait Connector
 {
@@ -184,6 +191,20 @@ where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
     sck: SCK,
 }
 
+impl<DATA, CS, SCK> PinConnector<DATA, CS, SCK>
+where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
+{
+    pub fn new(displays: usize, data: DATA, cs: CS, sck: SCK) -> Self {
+        PinConnector {
+            devices: displays,
+            buffer: [0; MAX_DISPLAYS],
+            data,
+            cs,
+            sck,
+        }
+    }
+}
+
 impl<DATA, CS, SCK> Connector for PinConnector<DATA, CS, SCK>
 where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
       PinError: core::convert::From<<DATA as embedded_hal::digital::v2::OutputPin>::Error>,
@@ -224,20 +245,51 @@ where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
     }
 }
 
-impl<DATA, CS, SCK> PinConnector<DATA, CS, SCK>
-where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
+pub struct SpiConnector<SPI, CS>
+where SPI: Write<u8>, CS: OutputPin,
 {
-    pub fn new(displays: usize, data: DATA, cs: CS, sck: SCK) -> Self {
-        PinConnector {
+    devices: usize,
+    buffer: [u8; MAX_DISPLAYS],
+    spi: SPI,
+    cs: CS,
+}
+
+impl<SPI, CS> SpiConnector<SPI, CS>
+where SPI: Write<u8>, CS: OutputPin,
+{
+    pub fn new(displays: usize, spi: SPI, cs: CS) -> Self {
+        SpiConnector {
             devices: displays,
             buffer: [0; MAX_DISPLAYS],
-            data,
+            spi,
             cs,
-            sck,
         }
     }
 }
 
+impl<SPI, CS> Connector for SpiConnector<SPI, CS>
+where SPI: Write<u8>, CS: OutputPin,
+      PinError: core::convert::From<<SPI as embedded_hal::blocking::spi::Write<u8>>::Error>,
+      PinError: core::convert::From<<CS as embedded_hal::digital::v2::OutputPin>::Error>,
+{
+    fn devices(&self) -> usize {
+        self.devices
+    }
+
+    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), PinError> {
+        let offset = addr * 2;
+        self.buffer = [0; MAX_DISPLAYS];
+
+        self.buffer[offset] = header;
+        self.buffer[offset + 1] = data;
+
+        self.cs.set_low()?;
+        self.spi.write(&self.buffer)?;
+        self.cs.set_high()?;
+
+        Ok(())
+    }
+}
 
 ///
 /// Handles communication with the MAX7219
@@ -258,9 +310,21 @@ where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
       PinError: core::convert::From<<SCK as embedded_hal::digital::v2::OutputPin>::Error>,
 {
     pub fn from_pins(displays: usize, data: DATA, cs: CS, sck: SCK) -> Result<Self, PinError>
-    where DATA: OutputPin, CS: OutputPin, SCK: OutputPin
     {
         MAX7219::new(PinConnector::new(displays, data, cs, sck))
+    }
+}
+
+
+impl<SPI, CS> MAX7219<SpiConnector<SPI, CS>>
+where SPI: Write<u8>, CS: OutputPin,
+      PinError: core::convert::From<()>,
+      PinError: core::convert::From<<SPI as embedded_hal::blocking::spi::Write<u8>>::Error>,
+      PinError: core::convert::From<<CS as embedded_hal::digital::v2::OutputPin>::Error>,
+{
+    pub fn from_spi(displays: usize, spi: SPI, cs: CS) -> Result<Self, PinError>
+    {
+        MAX7219::new(SpiConnector::new(displays, spi, cs))
     }
 }
 
