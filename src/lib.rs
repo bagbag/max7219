@@ -136,54 +136,152 @@ impl From<core::convert::Infallible> for PinError {
     }
 }
 
+/// Describes the interface used to connect to the MX7219
+pub trait Connector
+{
+    fn devices(&self) -> usize;
+
+    ///
+    /// Writes data to given register as described by command
+    /// 
+    /// # Arguments
+    /// 
+    /// * `addr` - display to address as connected in series
+    /// * `command` - the command/register on the display to write to
+    /// * `data` - the data byte value to write
+    ///
+    /// # Errors
+    /// 
+    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    /// 
+    fn write_data(&mut self, addr: usize, command: Command, data: u8) -> Result<(), PinError> {
+        self.write_raw(addr, command as u8, data)
+    }
+
+    ///
+    /// Writes data to given register as described by command
+    /// 
+    /// # Arguments
+    /// 
+    /// * `addr` - display to address as connected in series
+    /// * `header` - the command/register on the display to write to as u8
+    /// * `data` - the data byte value to write
+    ///
+    /// # Errors
+    /// 
+    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    /// 
+    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), PinError>;
+}
+
+pub struct PinConnector<DATA, CS, SCK>
+where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
+{
+    devices: usize,
+    buffer: [u8; MAX_DISPLAYS],
+    data: DATA,
+    cs: CS,
+    sck: SCK,
+}
+
+impl<DATA, CS, SCK> Connector for PinConnector<DATA, CS, SCK>
+where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
+      PinError: core::convert::From<<DATA as embedded_hal::digital::v2::OutputPin>::Error>,
+      PinError: core::convert::From<<CS as embedded_hal::digital::v2::OutputPin>::Error>,
+      PinError: core::convert::From<<SCK as embedded_hal::digital::v2::OutputPin>::Error>,
+{
+    fn devices(&self) -> usize {
+        self.devices
+    }
+
+    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), PinError> {
+        let offset = addr * 2;
+        let max_bytes = self.devices * 2;
+        self.buffer = [0; MAX_DISPLAYS];
+
+        self.buffer[offset] = header;
+        self.buffer[offset + 1] = data;
+
+        self.cs.set_low()?;
+        for b in 0..max_bytes {
+            let value = self.buffer[b];
+            
+            for i in 0..8 {
+                if value & (1 << (7 - i)) > 0 {
+                    self.data.set_high()?;
+                } else {
+                    self.data.set_low()?;
+                }
+
+                self.sck.set_high()?;
+                self.sck.set_low()?;
+            }
+
+        }
+        self.cs.set_high()?;
+
+        Ok(())
+    }
+}
+
+impl<DATA, CS, SCK> PinConnector<DATA, CS, SCK>
+where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
+{
+    pub fn new(displays: usize, data: DATA, cs: CS, sck: SCK) -> Self {
+        PinConnector {
+            devices: displays,
+            buffer: [0; MAX_DISPLAYS],
+            data,
+            cs,
+            sck,
+        }
+    }
+}
+
+
 ///
 /// Handles communication with the MAX7219
 /// chip for segmented displays. Each display can be
 /// connected in series with another and controlled via
 /// a single connection.
 ///
-pub struct MAX7219<DATA, CS, CLK>
+pub struct MAX7219<CONNECTOR>
 {
-    data: DATA,
-    cs: CS,
-    clk: CLK,
-    devices: usize,
-    buffer: [u8; MAX_DISPLAYS],
+    c: CONNECTOR,
     decode_mode: DecodeMode,
 }
 
-impl<DATA, CS, CLK> MAX7219<DATA, CS, CLK>
-where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
+impl<DATA, CS, SCK> MAX7219<PinConnector<DATA, CS, SCK>>
+where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
       PinError: core::convert::From<<DATA as embedded_hal::digital::v2::OutputPin>::Error>,
       PinError: core::convert::From<<CS as embedded_hal::digital::v2::OutputPin>::Error>,
-      PinError: core::convert::From<<CLK as embedded_hal::digital::v2::OutputPin>::Error>,
+      PinError: core::convert::From<<SCK as embedded_hal::digital::v2::OutputPin>::Error>,
+{
+    pub fn from_pins(displays: usize, data: DATA, cs: CS, sck: SCK) -> Result<Self, PinError>
+    where DATA: OutputPin, CS: OutputPin, SCK: OutputPin
+    {
+        MAX7219::new(PinConnector::new(displays, data, cs, sck))
+    }
+}
+
+impl<CONNECTOR> MAX7219<CONNECTOR>
+where CONNECTOR: Connector
 {
     ///
-    /// Returns a new MAX7219 handler for the displays
+    /// Returns a new MAX7219 handler for the displays using PINs directly.
     /// Each display starts blanked, with power and test mode turned off
     /// 
     /// # Arguments
     /// 
-    /// * `devices` - number of displays connected in series
-    /// * `data` - the MOSI/DATA PIN previously set to Output mode
-    /// * `cs` - the CS/SS PIN previously set to Output mode
-    /// * `clk` - the CLK PIN previously set to Output mode
+    /// * `connector` - the connector implementation to use to talk to the display
     ///
     /// # Errors
     /// 
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     /// 
-    pub fn new(devices: usize, data: DATA, cs: CS, clk: CLK) -> Result<Self, PinError> {
-
-        let mut num_devices = devices;
-        if num_devices > MAX_DISPLAYS {
-            num_devices = MAX_DISPLAYS;
-        }
-
+    pub fn new(connector: CONNECTOR) -> Result<Self, PinError> {
         let mut max7219 = MAX7219 {
-            data, cs, clk, 
-            devices: num_devices, 
-            buffer: [0; MAX_DISPLAYS],
+            c: connector,
             decode_mode: DecodeMode::NoDecode,
         };
 
@@ -199,8 +297,8 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     /// 
     pub fn power_on(&mut self) -> Result<(), PinError> {
-        for i in 0..self.devices {
-            self.write_data(i, Command::Power, 0x01)?;
+        for i in 0..self.c.devices() {
+            self.c.write_data(i, Command::Power, 0x01)?;
         }
 
         Ok(())
@@ -214,8 +312,8 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     /// 
     pub fn power_off(&mut self) -> Result<(), PinError> {
-        for i in 0..self.devices {
-            self.write_data(i, Command::Power, 0x00)?;
+        for i in 0..self.c.devices() {
+            self.c.write_data(i, Command::Power, 0x00)?;
         }
 
         Ok(())
@@ -234,7 +332,7 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
     /// 
     pub fn clear_display(&mut self, addr: usize) -> Result<(), PinError> {
         for i in 1..9 {
-            self.write_raw(addr, i, 0x00)?;
+            self.c.write_raw(addr, i, 0x00)?;
         }
 
         Ok(())
@@ -253,7 +351,7 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     /// 
     pub fn set_intensity(&mut self, addr: usize, intensity: u8) -> Result<(), PinError> {
-        self.write_data(addr, Command::Intensity, intensity)
+        self.c.write_data(addr, Command::Intensity, intensity)
     }
 
     ///
@@ -270,24 +368,7 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
     /// 
     pub fn set_decode_mode(&mut self, addr: usize, mode: DecodeMode) -> Result<(), PinError> {
         self.decode_mode = mode; // store what we set
-        self.write_data(addr, Command::DecodeMode, mode as u8)
-    }
-
-    ///
-    /// Writes data to given register as described by command
-    /// 
-    /// # Arguments
-    /// 
-    /// * `addr` - display to address as connected in series
-    /// * `command` - the command/register on the display to write to
-    /// * `data` - the data byte value
-    ///
-    /// # Errors
-    /// 
-    /// * `PinError` - returned in case there was an error setting a PIN on the device
-    /// 
-    pub fn write_data(&mut self, addr: usize, command: Command, data: u8) -> Result<(), PinError> {
-        self.write_raw(addr, command as u8, data)
+        self.c.write_data(addr, Command::DecodeMode, mode as u8)
     }
 
     ///
@@ -312,7 +393,7 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
         for b in string {
             let dot = (dots & dot_product) > 0;
             dot_product = dot_product >> 1;
-            self.write_raw(addr, digit, ssb_byte(*b, dot))?;
+            self.c.write_raw(addr, digit, ssb_byte(*b, dot))?;
 
             digit = digit - 1;
         }
@@ -342,7 +423,7 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
 
         let mut digit: u8 = MAX_DIGITS as u8;
         for b in bcd {
-            self.write_raw(addr, digit, bcd_byte(*b))?;
+            self.c.write_raw(addr, digit, bcd_byte(*b))?;
 
             digit = digit - 1;
         }
@@ -366,57 +447,20 @@ where DATA: OutputPin, CS: OutputPin, CLK: OutputPin,
     /// 
     pub fn test(&mut self, addr: usize, is_on: bool) -> Result<(), PinError> {
         if is_on {
-            self.write_data(addr, Command::DisplayTest, 0x01)
+            self.c.write_data(addr, Command::DisplayTest, 0x01)
         } else {
-            self.write_data(addr, Command::DisplayTest, 0x00)
+            self.c.write_data(addr, Command::DisplayTest, 0x00)
         }
     }
 
     fn init(&mut self) -> Result<(), PinError> {
-        for i in 0..self.devices {
+        for i in 0..self.c.devices() {
             self.test(i, false)?; // turn testmode off
-            self.write_data(i, Command::ScanLimit, 0x07)?; // set scanlimit
+            self.c.write_data(i, Command::ScanLimit, 0x07)?; // set scanlimit
             self.set_decode_mode(i, DecodeMode::NoDecode)?; // direct decode
             self.clear_display(i)?; // clear all digits
         }
         self.power_off()?; // power off
-
-        Ok(())
-    }
-
-    fn empty_buffer(&mut self) {
-        self.buffer = [0; MAX_DISPLAYS];
-    }
-
-    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), PinError> {
-        let offset = addr * 2;
-        let max_bytes = self.devices * 2;
-        self.empty_buffer();
-
-        self.buffer[offset] = header;
-        self.buffer[offset + 1] = data;
-
-        self.cs.set_low()?;
-        for i in 0..max_bytes {
-            let buffer_data = self.buffer[i];
-            self.shift_out(buffer_data)?;
-        }
-        self.cs.set_high()?;
-
-        Ok(())
-    }
-
-    fn shift_out(&mut self, value: u8) -> Result<(), PinError> {
-        for i in 0..8 {
-            if value & (1 << (7 - i)) > 0 {
-                self.data.set_high()?;
-            } else {
-                self.data.set_low()?;
-            }
-
-            self.clk.set_high()?;
-            self.clk.set_low()?;
-        }
 
         Ok(())
     }
