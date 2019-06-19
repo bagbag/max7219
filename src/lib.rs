@@ -14,6 +14,9 @@ extern crate embedded_hal;
 use embedded_hal::digital::v2::OutputPin;
 use embedded_hal::blocking::spi::Write;
 
+mod connectors;
+use connectors::*;
+
 /// Maximum number of displays connected in series supported by this lib.
 const MAX_DISPLAYS: usize = 8;
 
@@ -50,80 +53,6 @@ pub enum DecodeMode
     CodeBDigits7_0 = 0xFF
 }
 
-/// 
-/// Translate alphanumeric ASCII bytes into BCD
-/// encoded bytes expected by the display chip.
-/// 
-fn bcd_byte(b: u8) -> u8 {
-    match b as char {
-        ' ' => 0b00001111,        // "blank"
-        '-' => 0b00001010,        // - without .
-        'e' => 0b00001011,        // E without .
-        'E' => 0b10001011,        // E with .
-        'h' => 0b00001100,        // H without .
-        'H' => 0b10001100,        // H with .
-        'l' => 0b00001101,        // L without .
-        'L' => 0b10001101,        // L with .
-        'p' => 0b00001110,        // L without .
-        'P' => 0b10001110,        // L with .
-        _   => b,
-    }
-}
-
-/// 
-/// Translate alphanumeric ASCII bytes into segment set bytes
-/// 
-fn ssb_byte(b: u8, dot: bool) -> u8 {
-    let mut result = match b as char {
-        ' ' => 0b00000000,        // "blank"
-        '.' => 0b10000000,
-        '-' => 0b00000001,        // -
-        '0' => 0b01111110,
-        '1' => 0b00110000,
-        '2' => 0b01101101,
-        '3' => 0b01111001,
-        '4' => 0b00110011,
-        '5' => 0b01011011,
-        '6' => 0b01011111,
-        '7' => 0b01110000,
-        '8' => 0b01111111,
-        '9' => 0b01111011,
-        'a' | 'A' => 0b01110111,
-        'b'       => 0b00011111,
-        'c' | 'C' => 0b01001110,
-        'd'       => 0b00111101,
-        'e' | 'E' => 0b01001111,
-        'f' | 'F' => 0b01000111,
-        'g' | 'G' => 0b01011110,
-        'h' | 'H' => 0b00110111,
-        'i' | 'I' => 0b00110000,
-        'j' | 'J' => 0b00111100,
-        // K undoable
-        'l' | 'L' => 0b00001110,
-        // M undoable
-        // N undoable
-        'o' | 'O' => 0b01111110,
-        'p' | 'P' => 0b01100111,
-        'q'       => 0b01110011,
-        // R undoable
-        's' | 'S' => 0b01011011,
-        // T undoable
-        'u' | 'U' => 0b00111110,
-        // V undoable
-        // W undoable
-        // X undoable
-        // Y undoable
-        // Z undoable
-        _         => 0b11100101,        // ?
-    };
-
-    if dot {
-        result = result | 0b10000000; // turn "." on
-    }
-
-    result
-}
-
 ///
 /// Error raised in case there was a PIN interaction
 /// error during communication with the MAX7219 chip.
@@ -143,154 +72,6 @@ impl From<()> for PinError {
     }
 }
 
-/// Describes the interface used to connect to the MX7219
-pub trait Connector
-{
-    fn devices(&self) -> usize;
-
-    ///
-    /// Writes data to given register as described by command
-    /// 
-    /// # Arguments
-    /// 
-    /// * `addr` - display to address as connected in series
-    /// * `command` - the command/register on the display to write to
-    /// * `data` - the data byte value to write
-    ///
-    /// # Errors
-    /// 
-    /// * `PinError` - returned in case there was an error setting a PIN on the device
-    /// 
-    fn write_data(&mut self, addr: usize, command: Command, data: u8) -> Result<(), PinError> {
-        self.write_raw(addr, command as u8, data)
-    }
-
-    ///
-    /// Writes data to given register as described by command
-    /// 
-    /// # Arguments
-    /// 
-    /// * `addr` - display to address as connected in series
-    /// * `header` - the command/register on the display to write to as u8
-    /// * `data` - the data byte value to write
-    ///
-    /// # Errors
-    /// 
-    /// * `PinError` - returned in case there was an error setting a PIN on the device
-    /// 
-    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), PinError>;
-}
-
-pub struct PinConnector<DATA, CS, SCK>
-where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
-{
-    devices: usize,
-    buffer: [u8; MAX_DISPLAYS],
-    data: DATA,
-    cs: CS,
-    sck: SCK,
-}
-
-impl<DATA, CS, SCK> PinConnector<DATA, CS, SCK>
-where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
-{
-    pub fn new(displays: usize, data: DATA, cs: CS, sck: SCK) -> Self {
-        PinConnector {
-            devices: displays,
-            buffer: [0; MAX_DISPLAYS],
-            data,
-            cs,
-            sck,
-        }
-    }
-}
-
-impl<DATA, CS, SCK> Connector for PinConnector<DATA, CS, SCK>
-where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
-      PinError: core::convert::From<<DATA as embedded_hal::digital::v2::OutputPin>::Error>,
-      PinError: core::convert::From<<CS as embedded_hal::digital::v2::OutputPin>::Error>,
-      PinError: core::convert::From<<SCK as embedded_hal::digital::v2::OutputPin>::Error>,
-{
-    fn devices(&self) -> usize {
-        self.devices
-    }
-
-    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), PinError> {
-        let offset = addr * 2;
-        let max_bytes = self.devices * 2;
-        self.buffer = [0; MAX_DISPLAYS];
-
-        self.buffer[offset] = header;
-        self.buffer[offset + 1] = data;
-
-        self.cs.set_low()?;
-        for b in 0..max_bytes {
-            let value = self.buffer[b];
-            
-            for i in 0..8 {
-                if value & (1 << (7 - i)) > 0 {
-                    self.data.set_high()?;
-                } else {
-                    self.data.set_low()?;
-                }
-
-                self.sck.set_high()?;
-                self.sck.set_low()?;
-            }
-
-        }
-        self.cs.set_high()?;
-
-        Ok(())
-    }
-}
-
-pub struct SpiConnector<SPI, CS>
-where SPI: Write<u8>, CS: OutputPin,
-{
-    devices: usize,
-    buffer: [u8; MAX_DISPLAYS],
-    spi: SPI,
-    cs: CS,
-}
-
-impl<SPI, CS> SpiConnector<SPI, CS>
-where SPI: Write<u8>, CS: OutputPin,
-{
-    pub fn new(displays: usize, spi: SPI, cs: CS) -> Self {
-        SpiConnector {
-            devices: displays,
-            buffer: [0; MAX_DISPLAYS],
-            spi,
-            cs,
-        }
-    }
-}
-
-impl<SPI, CS> Connector for SpiConnector<SPI, CS>
-where SPI: Write<u8>, CS: OutputPin,
-      PinError: core::convert::From<<SPI as embedded_hal::blocking::spi::Write<u8>>::Error>,
-      PinError: core::convert::From<<CS as embedded_hal::digital::v2::OutputPin>::Error>,
-{
-    fn devices(&self) -> usize {
-        self.devices
-    }
-
-    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), PinError> {
-        let offset = addr * 2;
-        self.buffer = [0; MAX_DISPLAYS];
-
-        self.buffer[offset] = header;
-        self.buffer[offset + 1] = data;
-
-        self.cs.set_low()?;
-        self.spi.write(&self.buffer)?;
-        self.cs.set_high()?;
-
-        Ok(())
-    }
-}
-
 ///
 /// Handles communication with the MAX7219
 /// chip for segmented displays. Each display can be
@@ -298,61 +79,15 @@ where SPI: Write<u8>, CS: OutputPin,
 /// a single connection.
 ///
 pub struct MAX7219<CONNECTOR>
+where CONNECTOR: Connector
 {
     c: CONNECTOR,
     decode_mode: DecodeMode,
 }
 
-impl<DATA, CS, SCK> MAX7219<PinConnector<DATA, CS, SCK>>
-where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
-      PinError: core::convert::From<<DATA as embedded_hal::digital::v2::OutputPin>::Error>,
-      PinError: core::convert::From<<CS as embedded_hal::digital::v2::OutputPin>::Error>,
-      PinError: core::convert::From<<SCK as embedded_hal::digital::v2::OutputPin>::Error>,
-{
-    pub fn from_pins(displays: usize, data: DATA, cs: CS, sck: SCK) -> Result<Self, PinError>
-    {
-        MAX7219::new(PinConnector::new(displays, data, cs, sck))
-    }
-}
-
-
-impl<SPI, CS> MAX7219<SpiConnector<SPI, CS>>
-where SPI: Write<u8>, CS: OutputPin,
-      PinError: core::convert::From<()>,
-      PinError: core::convert::From<<SPI as embedded_hal::blocking::spi::Write<u8>>::Error>,
-      PinError: core::convert::From<<CS as embedded_hal::digital::v2::OutputPin>::Error>,
-{
-    pub fn from_spi(displays: usize, spi: SPI, cs: CS) -> Result<Self, PinError>
-    {
-        MAX7219::new(SpiConnector::new(displays, spi, cs))
-    }
-}
-
 impl<CONNECTOR> MAX7219<CONNECTOR>
 where CONNECTOR: Connector
 {
-    ///
-    /// Returns a new MAX7219 handler for the displays using PINs directly.
-    /// Each display starts blanked, with power and test mode turned off
-    /// 
-    /// # Arguments
-    /// 
-    /// * `connector` - the connector implementation to use to talk to the display
-    ///
-    /// # Errors
-    /// 
-    /// * `PinError` - returned in case there was an error setting a PIN on the device
-    /// 
-    pub fn new(connector: CONNECTOR) -> Result<Self, PinError> {
-        let mut max7219 = MAX7219 {
-            c: connector,
-            decode_mode: DecodeMode::NoDecode,
-        };
-
-        max7219.init()?;
-        Ok(max7219)
-    }
-
     ///
     /// Powers on all connected displays
     ///
@@ -517,6 +252,17 @@ where CONNECTOR: Connector
         }
     }
 
+    // internal constructor, users should call ::from_pins or ::from_spi
+    fn new(connector: CONNECTOR) -> Result<Self, PinError> {
+        let mut max7219 = MAX7219 {
+            c: connector,
+            decode_mode: DecodeMode::NoDecode,
+        };
+
+        max7219.init()?;
+        Ok(max7219)
+    }
+
     fn init(&mut self) -> Result<(), PinError> {
         for i in 0..self.c.devices() {
             self.test(i, false)?; // turn testmode off
@@ -528,4 +274,130 @@ where CONNECTOR: Connector
 
         Ok(())
     }
+}
+
+impl<DATA, CS, SCK> MAX7219<PinConnector<DATA, CS, SCK>>
+where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
+      PinError: core::convert::From<<DATA as embedded_hal::digital::v2::OutputPin>::Error>,
+      PinError: core::convert::From<<CS as embedded_hal::digital::v2::OutputPin>::Error>,
+      PinError: core::convert::From<<SCK as embedded_hal::digital::v2::OutputPin>::Error>,
+{
+    ///
+    /// Construct a new MAX7219 driver instance from DATA, CS and SCK pins.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `displays` - number of displays connected in series
+    /// * `data` - the MOSI/DATA PIN used to send data through to the display set to output mode
+    /// * `cs` - the CS PIN used to LOAD register on the display set to output mode
+    /// * `sck` - the SCK clock PIN used to drive the clock set to output mode
+    /// 
+    /// # Errors
+    /// 
+    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    /// 
+    pub fn from_pins(displays: usize, data: DATA, cs: CS, sck: SCK) -> Result<Self, PinError>
+    {
+        MAX7219::new(PinConnector::new(displays, data, cs, sck))
+    }
+}
+
+
+impl<SPI, CS> MAX7219<SpiConnector<SPI, CS>>
+where SPI: Write<u8>, CS: OutputPin,
+      PinError: core::convert::From<()>,
+      PinError: core::convert::From<<SPI as embedded_hal::blocking::spi::Write<u8>>::Error>,
+      PinError: core::convert::From<<CS as embedded_hal::digital::v2::OutputPin>::Error>,
+{
+    ///
+    /// Construct a new MAX7219 driver instance from SPI and the CS pin.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `displays` - number of displays connected in series
+    /// * `spi` - the SPI interface initialized with MOSI, MISO(unused) and CLK
+    /// * `cs` - the CS PIN used to LOAD register on the display set to output mode
+    /// 
+    /// # Errors
+    /// 
+    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    /// 
+    pub fn from_spi(displays: usize, spi: SPI, cs: CS) -> Result<Self, PinError>
+    {
+        MAX7219::new(SpiConnector::new(displays, spi, cs))
+    }
+}
+
+/// 
+/// Translate alphanumeric ASCII bytes into BCD
+/// encoded bytes expected by the display chip.
+/// 
+fn bcd_byte(b: u8) -> u8 {
+    match b as char {
+        ' ' => 0b00001111,        // "blank"
+        '-' => 0b00001010,        // - without .
+        'e' => 0b00001011,        // E without .
+        'E' => 0b10001011,        // E with .
+        'h' => 0b00001100,        // H without .
+        'H' => 0b10001100,        // H with .
+        'l' => 0b00001101,        // L without .
+        'L' => 0b10001101,        // L with .
+        'p' => 0b00001110,        // L without .
+        'P' => 0b10001110,        // L with .
+        _   => b,
+    }
+}
+
+/// 
+/// Translate alphanumeric ASCII bytes into segment set bytes
+/// 
+fn ssb_byte(b: u8, dot: bool) -> u8 {
+    let mut result = match b as char {
+        ' ' => 0b00000000,        // "blank"
+        '.' => 0b10000000,
+        '-' => 0b00000001,        // -
+        '0' => 0b01111110,
+        '1' => 0b00110000,
+        '2' => 0b01101101,
+        '3' => 0b01111001,
+        '4' => 0b00110011,
+        '5' => 0b01011011,
+        '6' => 0b01011111,
+        '7' => 0b01110000,
+        '8' => 0b01111111,
+        '9' => 0b01111011,
+        'a' | 'A' => 0b01110111,
+        'b'       => 0b00011111,
+        'c' | 'C' => 0b01001110,
+        'd'       => 0b00111101,
+        'e' | 'E' => 0b01001111,
+        'f' | 'F' => 0b01000111,
+        'g' | 'G' => 0b01011110,
+        'h' | 'H' => 0b00110111,
+        'i' | 'I' => 0b00110000,
+        'j' | 'J' => 0b00111100,
+        // K undoable
+        'l' | 'L' => 0b00001110,
+        // M undoable
+        // N undoable
+        'o' | 'O' => 0b01111110,
+        'p' | 'P' => 0b01100111,
+        'q'       => 0b01110011,
+        // R undoable
+        's' | 'S' => 0b01011011,
+        // T undoable
+        'u' | 'U' => 0b00111110,
+        // V undoable
+        // W undoable
+        // X undoable
+        // Y undoable
+        // Z undoable
+        _         => 0b11100101,        // ?
+    };
+
+    if dot {
+        result = result | 0b10000000; // turn "." on
+    }
+
+    result
 }
