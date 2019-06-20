@@ -79,7 +79,6 @@ impl From<()> for PinError {
 /// a single connection.
 ///
 pub struct MAX7219<CONNECTOR>
-where CONNECTOR: Connector
 {
     c: CONNECTOR,
     decode_mode: DecodeMode,
