@@ -70,9 +70,9 @@ where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
 
 impl<DATA, CS, SCK> Connector for PinConnector<DATA, CS, SCK>
 where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
-      PinError: core::convert::From<<DATA as embedded_hal::digital::v2::OutputPin>::Error>,
-      PinError: core::convert::From<<CS as embedded_hal::digital::v2::OutputPin>::Error>,
-      PinError: core::convert::From<<SCK as embedded_hal::digital::v2::OutputPin>::Error>,
+      PinError: core::convert::From<DATA::Error>,
+      PinError: core::convert::From<CS::Error>,
+      PinError: core::convert::From<SCK::Error>,
 {
     fn devices(&self) -> usize {
         self.devices
@@ -132,8 +132,8 @@ where SPI: Write<u8>, CS: OutputPin,
 
 impl<SPI, CS> Connector for SpiConnector<SPI, CS>
 where SPI: Write<u8>, CS: OutputPin,
-      PinError: core::convert::From<<SPI as embedded_hal::blocking::spi::Write<u8>>::Error>,
-      PinError: core::convert::From<<CS as embedded_hal::digital::v2::OutputPin>::Error>,
+      PinError: core::convert::From<SPI::Error>,
+      PinError: core::convert::From<CS::Error>,
 {
     fn devices(&self) -> usize {
         self.devices

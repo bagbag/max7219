@@ -277,9 +277,9 @@ where CONNECTOR: Connector
 
 impl<DATA, CS, SCK> MAX7219<PinConnector<DATA, CS, SCK>>
 where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
-      PinError: core::convert::From<<DATA as embedded_hal::digital::v2::OutputPin>::Error>,
-      PinError: core::convert::From<<CS as embedded_hal::digital::v2::OutputPin>::Error>,
-      PinError: core::convert::From<<SCK as embedded_hal::digital::v2::OutputPin>::Error>,
+      PinError: core::convert::From<DATA::Error>,
+      PinError: core::convert::From<CS::Error>,
+      PinError: core::convert::From<SCK::Error>,
 {
     ///
     /// Construct a new MAX7219 driver instance from DATA, CS and SCK pins.
@@ -305,8 +305,8 @@ where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
 impl<SPI, CS> MAX7219<SpiConnector<SPI, CS>>
 where SPI: Write<u8>, CS: OutputPin,
       PinError: core::convert::From<()>,
-      PinError: core::convert::From<<SPI as embedded_hal::blocking::spi::Write<u8>>::Error>,
-      PinError: core::convert::From<<CS as embedded_hal::digital::v2::OutputPin>::Error>,
+      PinError: core::convert::From<SPI::Error>,
+      PinError: core::convert::From<CS::Error>,
 {
     ///
     /// Construct a new MAX7219 driver instance from SPI and the CS pin.
