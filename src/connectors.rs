@@ -48,7 +48,7 @@ pub struct PinConnector<DATA, CS, SCK>
 where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
 {
     devices: usize,
-    buffer: [u8; MAX_DISPLAYS],
+    buffer: [u8; MAX_DISPLAYS * 2],
     data: DATA,
     cs: CS,
     sck: SCK,
@@ -60,7 +60,7 @@ where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
     pub(crate) fn new(displays: usize, data: DATA, cs: CS, sck: SCK) -> Self {
         PinConnector {
             devices: displays,
-            buffer: [0; MAX_DISPLAYS],
+            buffer: [0; MAX_DISPLAYS * 2],
             data,
             cs,
             sck,
@@ -81,7 +81,7 @@ where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
     fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), PinError> {
         let offset = addr * 2;
         let max_bytes = self.devices * 2;
-        self.buffer = [0; MAX_DISPLAYS];
+        self.buffer = [0; MAX_DISPLAYS * 2];
 
         self.buffer[offset] = header;
         self.buffer[offset + 1] = data;
@@ -112,7 +112,7 @@ pub struct SpiConnector<SPI, CS>
 where SPI: Write<u8>, CS: OutputPin,
 {
     devices: usize,
-    buffer: [u8; MAX_DISPLAYS],
+    buffer: [u8; MAX_DISPLAYS * 2],
     spi: SPI,
     cs: CS,
 }
@@ -123,7 +123,7 @@ where SPI: Write<u8>, CS: OutputPin,
     pub(crate) fn new(displays: usize, spi: SPI, cs: CS) -> Self {
         SpiConnector {
             devices: displays,
-            buffer: [0; MAX_DISPLAYS],
+            buffer: [0; MAX_DISPLAYS * 2],
             spi,
             cs,
         }
@@ -141,13 +141,14 @@ where SPI: Write<u8>, CS: OutputPin,
 
     fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), PinError> {
         let offset = addr * 2;
-        self.buffer = [0; MAX_DISPLAYS];
+        let max_bytes = self.devices * 2;
+        self.buffer = [0; MAX_DISPLAYS * 2];
 
         self.buffer[offset] = header;
         self.buffer[offset + 1] = data;
 
         self.cs.set_low()?;
-        self.spi.write(&self.buffer)?;
+        self.spi.write(&self.buffer[0..max_bytes])?;
         self.cs.set_high()?;
 
         Ok(())
