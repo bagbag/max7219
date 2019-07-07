@@ -16,7 +16,7 @@ pub trait Connector
     /// 
     /// # Arguments
     /// 
-    /// * `addr` - display to address as connected in series
+    /// * `addr` - display to address as connected in series (0 -> last)
     /// * `command` - the command/register on the display to write to
     /// * `data` - the data byte value to write
     ///
@@ -33,7 +33,7 @@ pub trait Connector
     /// 
     /// # Arguments
     /// 
-    /// * `addr` - display to address as connected in series
+    /// * `addr` - display to address as connected in series (0 -> last)
     /// * `header` - the command/register on the display to write to as u8
     /// * `data` - the data byte value to write
     ///

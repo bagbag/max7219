@@ -122,7 +122,7 @@ where CONNECTOR: Connector
     /// 
     /// # Arguments
     /// 
-    /// * `addr` - display to address as connected in series
+    /// * `addr` - display to address as connected in series (0 -> last)
     ///
     /// # Errors
     /// 
@@ -141,7 +141,7 @@ where CONNECTOR: Connector
     /// 
     /// # Arguments
     /// 
-    /// * `addr` - display to address as connected in series
+    /// * `addr` - display to address as connected in series (0 -> last)
     /// * `intensity` - intensity value to set to `0x00` to 0x0F`
     ///
     /// # Errors
@@ -157,7 +157,7 @@ where CONNECTOR: Connector
     /// 
     /// # Arguments
     /// 
-    /// * `addr` - display to address as connected in series
+    /// * `addr` - display to address as connected in series (0 -> last)
     /// * `mode` - the decode mode to set
     ///
     /// # Errors
@@ -174,7 +174,7 @@ where CONNECTOR: Connector
     /// 
     /// # Arguments
     /// 
-    /// * `addrs` - list of devices over which to write the total bcd string (left to right)
+    /// * `addr` - display to address as connected in series (0 -> last)
     /// * `string` - the byte string to send 8 bytes long. Unknown characters result in question mark.
     /// * `dots` - u8 bit array specifying where to put dots in the string (1 = dot, 0 = not)
     ///
@@ -206,7 +206,7 @@ where CONNECTOR: Connector
     /// 
     /// # Arguments
     /// 
-    /// * `addrs` - list of devices over which to write the total bcd string (left to right)
+    /// * `addr` - display to address as connected in series (0 -> last)
     /// * `bcd` - the bcd encoded string slice consisting of [0-9,-,E,L,H,P]
     /// where upper case input for alphabetic characters results in dot being set.
     /// Length of string is always 8 bytes, use spaces for blanking.
@@ -236,7 +236,7 @@ where CONNECTOR: Connector
     /// 
     /// # Arguments
     /// 
-    /// * `addr` - display to address as connected in series
+    /// * `addr` - display to address as connected in series (0 -> last)
     /// * `is_on` - whether to turn test mode on or off
     ///
     /// # Errors
