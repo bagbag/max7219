@@ -4,15 +4,14 @@
 //!
 //! [`embedded-hal`]: https://docs.rs/embedded-hal/~0.2
 
-
 #![deny(unsafe_code)]
 #![deny(warnings)]
 #![no_std]
 
 extern crate embedded_hal;
 
-use embedded_hal::digital::v2::OutputPin;
 use embedded_hal::blocking::spi::Write;
+use embedded_hal::digital::v2::OutputPin;
 
 mod connectors;
 use connectors::*;
@@ -25,8 +24,7 @@ const MAX_DIGITS: usize = 8;
 
 /// Possible command register values on the display chip.
 #[derive(Clone, Copy)]
-pub enum Command
-{
+pub enum Command {
     Noop = 0x00,
     Digit0 = 0x01,
     Digit1 = 0x02,
@@ -40,17 +38,16 @@ pub enum Command
     Intensity = 0x0A,
     ScanLimit = 0x0B,
     Power = 0x0C,
-    DisplayTest = 0x0F
+    DisplayTest = 0x0F,
 }
 
 /// Decode modes for BCD encoded input.
 #[derive(Copy, Clone)]
-pub enum DecodeMode
-{
+pub enum DecodeMode {
     NoDecode = 0x00,
     CodeBDigit0 = 0x01,
     CodeBDigits3_0 = 0x0F,
-    CodeBDigits7_0 = 0xFF
+    CodeBDigits7_0 = 0xFF,
 }
 
 ///
@@ -78,22 +75,22 @@ impl From<()> for PinError {
 /// connected in series with another and controlled via
 /// a single connection.
 ///
-pub struct MAX7219<CONNECTOR>
-{
+pub struct MAX7219<CONNECTOR> {
     c: CONNECTOR,
     decode_mode: DecodeMode,
 }
 
 impl<CONNECTOR> MAX7219<CONNECTOR>
-where CONNECTOR: Connector
+where
+    CONNECTOR: Connector,
 {
     ///
     /// Powers on all connected displays
     ///
     /// # Errors
-    /// 
+    ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
-    /// 
+    ///
     pub fn power_on(&mut self) -> Result<(), PinError> {
         for i in 0..self.c.devices() {
             self.c.write_data(i, Command::Power, 0x01)?;
@@ -106,9 +103,9 @@ where CONNECTOR: Connector
     /// Powers off all connected displays
     ///
     /// # Errors
-    /// 
+    ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
-    /// 
+    ///
     pub fn power_off(&mut self) -> Result<(), PinError> {
         for i in 0..self.c.devices() {
             self.c.write_data(i, Command::Power, 0x00)?;
@@ -119,15 +116,15 @@ where CONNECTOR: Connector
 
     ///
     /// Clears display by settings all digits to empty
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `addr` - display to address as connected in series (0 -> last)
     ///
     /// # Errors
-    /// 
+    ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
-    /// 
+    ///
     pub fn clear_display(&mut self, addr: usize) -> Result<(), PinError> {
         for i in 1..9 {
             self.c.write_raw(addr, i, 0x00)?;
@@ -138,32 +135,32 @@ where CONNECTOR: Connector
 
     ///
     /// Sets intensity level on the display
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `addr` - display to address as connected in series (0 -> last)
     /// * `intensity` - intensity value to set to `0x00` to 0x0F`
     ///
     /// # Errors
-    /// 
+    ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
-    /// 
+    ///
     pub fn set_intensity(&mut self, addr: usize, intensity: u8) -> Result<(), PinError> {
         self.c.write_data(addr, Command::Intensity, intensity)
     }
 
     ///
     /// Sets decode mode to be used on input sent to the display chip.
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `addr` - display to address as connected in series (0 -> last)
     /// * `mode` - the decode mode to set
     ///
     /// # Errors
-    /// 
+    ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
-    /// 
+    ///
     pub fn set_decode_mode(&mut self, addr: usize, mode: DecodeMode) -> Result<(), PinError> {
         self.decode_mode = mode; // store what we set
         self.c.write_data(addr, Command::DecodeMode, mode as u8)
@@ -171,18 +168,23 @@ where CONNECTOR: Connector
 
     ///
     /// Writes byte string to the display
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `addr` - display to address as connected in series (0 -> last)
     /// * `string` - the byte string to send 8 bytes long. Unknown characters result in question mark.
     /// * `dots` - u8 bit array specifying where to put dots in the string (1 = dot, 0 = not)
     ///
     /// # Errors
-    /// 
+    ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
-    /// 
-    pub fn write_str(&mut self, addr: usize, string: &[u8;MAX_DIGITS], dots: u8) -> Result<(), PinError> {
+    ///
+    pub fn write_str(
+        &mut self,
+        addr: usize,
+        string: &[u8; MAX_DIGITS],
+        dots: u8,
+    ) -> Result<(), PinError> {
         let prev_dm = self.decode_mode;
         self.set_decode_mode(0, DecodeMode::NoDecode)?;
 
@@ -203,19 +205,19 @@ where CONNECTOR: Connector
 
     ///
     /// Writes BCD encoded string to the display
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `addr` - display to address as connected in series (0 -> last)
     /// * `bcd` - the bcd encoded string slice consisting of [0-9,-,E,L,H,P]
     /// where upper case input for alphabetic characters results in dot being set.
     /// Length of string is always 8 bytes, use spaces for blanking.
     ///
     /// # Errors
-    /// 
+    ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
-    /// 
-    pub fn write_bcd(&mut self, addr: usize, bcd: &[u8;MAX_DIGITS]) -> Result<(), PinError> {
+    ///
+    pub fn write_bcd(&mut self, addr: usize, bcd: &[u8; MAX_DIGITS]) -> Result<(), PinError> {
         let prev_dm = self.decode_mode;
         self.set_decode_mode(0, DecodeMode::CodeBDigits7_0)?;
 
@@ -233,16 +235,16 @@ where CONNECTOR: Connector
 
     ///
     /// Set test mode on/off
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `addr` - display to address as connected in series (0 -> last)
     /// * `is_on` - whether to turn test mode on or off
     ///
     /// # Errors
-    /// 
+    ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
-    /// 
+    ///
     pub fn test(&mut self, addr: usize, is_on: bool) -> Result<(), PinError> {
         if is_on {
             self.c.write_data(addr, Command::DisplayTest, 0x01)
@@ -276,85 +278,85 @@ where CONNECTOR: Connector
 }
 
 impl<DATA, CS, SCK> MAX7219<PinConnector<DATA, CS, SCK>>
-where DATA: OutputPin, CS: OutputPin, SCK: OutputPin,
-      PinError: core::convert::From<DATA::Error>,
-      PinError: core::convert::From<CS::Error>,
-      PinError: core::convert::From<SCK::Error>,
+where
+    DATA: OutputPin,
+    CS: OutputPin,
+    SCK: OutputPin,
+    PinError: core::convert::From<DATA::Error>,
+    PinError: core::convert::From<CS::Error>,
+    PinError: core::convert::From<SCK::Error>,
 {
     ///
     /// Construct a new MAX7219 driver instance from DATA, CS and SCK pins.
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `displays` - number of displays connected in series
     /// * `data` - the MOSI/DATA PIN used to send data through to the display set to output mode
     /// * `cs` - the CS PIN used to LOAD register on the display set to output mode
     /// * `sck` - the SCK clock PIN used to drive the clock set to output mode
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
-    /// 
-    pub fn from_pins(displays: usize, data: DATA, cs: CS, sck: SCK) -> Result<Self, PinError>
-    {
+    ///
+    pub fn from_pins(displays: usize, data: DATA, cs: CS, sck: SCK) -> Result<Self, PinError> {
         MAX7219::new(PinConnector::new(displays, data, cs, sck))
     }
 }
 
-
-impl<SPI, CS> MAX7219<SpiConnector<SPI, CS>>
-where SPI: Write<u8>, CS: OutputPin,
-      PinError: core::convert::From<()>,
-      PinError: core::convert::From<SPI::Error>,
-      PinError: core::convert::From<CS::Error>,
+impl<SPI> MAX7219<SpiConnector<SPI>>
+where
+    SPI: Write<u8>,
+    PinError: core::convert::From<()>,
+    PinError: core::convert::From<SPI::Error>,
 {
     ///
     /// Construct a new MAX7219 driver instance from SPI and the CS pin.
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `displays` - number of displays connected in series
     /// * `spi` - the SPI interface initialized with MOSI, MISO(unused) and CLK
     /// * `cs` - the CS PIN used to LOAD register on the display set to output mode
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
-    /// 
-    pub fn from_spi(displays: usize, spi: SPI, cs: CS) -> Result<Self, PinError>
-    {
-        MAX7219::new(SpiConnector::new(displays, spi, cs))
+    ///
+    pub fn from_spi(displays: usize, spi: SPI) -> Result<Self, PinError> {
+        MAX7219::new(SpiConnector::new(displays, spi))
     }
 }
 
-/// 
+///
 /// Translate alphanumeric ASCII bytes into BCD
 /// encoded bytes expected by the display chip.
-/// 
+///
 fn bcd_byte(b: u8) -> u8 {
     match b as char {
-        ' ' => 0b00001111,        // "blank"
-        '-' => 0b00001010,        // - without .
-        'e' => 0b00001011,        // E without .
-        'E' => 0b10001011,        // E with .
-        'h' => 0b00001100,        // H without .
-        'H' => 0b10001100,        // H with .
-        'l' => 0b00001101,        // L without .
-        'L' => 0b10001101,        // L with .
-        'p' => 0b00001110,        // L without .
-        'P' => 0b10001110,        // L with .
-        _   => b,
+        ' ' => 0b00001111, // "blank"
+        '-' => 0b00001010, // - without .
+        'e' => 0b00001011, // E without .
+        'E' => 0b10001011, // E with .
+        'h' => 0b00001100, // H without .
+        'H' => 0b10001100, // H with .
+        'l' => 0b00001101, // L without .
+        'L' => 0b10001101, // L with .
+        'p' => 0b00001110, // L without .
+        'P' => 0b10001110, // L with .
+        _ => b,
     }
 }
 
-/// 
+///
 /// Translate alphanumeric ASCII bytes into segment set bytes
-/// 
+///
 fn ssb_byte(b: u8, dot: bool) -> u8 {
     let mut result = match b as char {
-        ' ' => 0b00000000,        // "blank"
+        ' ' => 0b00000000, // "blank"
         '.' => 0b10000000,
-        '-' => 0b00000001,        // -
+        '-' => 0b00000001, // -
         '0' => 0b01111110,
         '1' => 0b00110000,
         '2' => 0b01101101,
@@ -366,9 +368,9 @@ fn ssb_byte(b: u8, dot: bool) -> u8 {
         '8' => 0b01111111,
         '9' => 0b01111011,
         'a' | 'A' => 0b01110111,
-        'b'       => 0b00011111,
+        'b' => 0b00011111,
         'c' | 'C' => 0b01001110,
-        'd'       => 0b00111101,
+        'd' => 0b00111101,
         'e' | 'E' => 0b01001111,
         'f' | 'F' => 0b01000111,
         'g' | 'G' => 0b01011110,
@@ -381,7 +383,7 @@ fn ssb_byte(b: u8, dot: bool) -> u8 {
         // N undoable
         'o' | 'O' => 0b01111110,
         'p' | 'P' => 0b01100111,
-        'q'       => 0b01110011,
+        'q' => 0b01110011,
         // R undoable
         's' | 'S' => 0b01011011,
         // T undoable
@@ -391,7 +393,7 @@ fn ssb_byte(b: u8, dot: bool) -> u8 {
         // X undoable
         // Y undoable
         // Z undoable
-        _         => 0b11100101,        // ?
+        _ => 0b11100101, // ?
     };
 
     if dot {
