@@ -73,7 +73,8 @@ impl From<()> for PinError {
 /// Handles communication with the MAX7219
 /// chip for segmented displays. Each display can be
 /// connected in series with another and controlled via
-/// a single connection.
+/// a single connection. The actual connection interface
+/// is selected via constructor functions.
 ///
 pub struct MAX7219<CONNECTOR> {
     c: CONNECTOR,
@@ -312,7 +313,8 @@ where
     PinError: core::convert::From<SPI::Error>,
 {
     ///
-    /// Construct a new MAX7219 driver instance from SPI and the CS pin.
+    /// Construct a new MAX7219 driver instance from pre-existing SPI.
+    /// * `NOTE` - make sure the SPI is initialized in MODE_0 with max 10 Mhz frequency.
     ///
     /// # Arguments
     ///
