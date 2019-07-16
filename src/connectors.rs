@@ -42,6 +42,7 @@ pub trait Connector {
     fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), PinError>;
 }
 
+/// Direct GPIO pins connector
 pub struct PinConnector<DATA, CS, SCK>
 where
     DATA: OutputPin,
@@ -123,6 +124,7 @@ where
     spi: SPI,
 }
 
+/// Hardware controlled CS connector with SPI transfer
 impl<SPI> SpiConnector<SPI>
 where
     SPI: Write<u8>,
@@ -154,6 +156,60 @@ where
         self.buffer[offset + 1] = data;
 
         self.spi.write(&self.buffer[0..max_bytes])?;
+
+        Ok(())
+    }
+}
+
+/// Software controlled CS connector with SPI transfer
+pub struct SpiConnectorSW<SPI, CS>
+where
+    SPI: Write<u8>,
+    CS: OutputPin,
+{
+    devices: usize,
+    buffer: [u8; MAX_DISPLAYS * 2],
+    spi: SPI,
+    cs: CS,
+}
+
+impl<SPI, CS> SpiConnectorSW<SPI, CS>
+where
+    SPI: Write<u8>,
+    CS: OutputPin,
+{
+    pub(crate) fn new(displays: usize, spi: SPI, cs: CS) -> Self {
+        SpiConnectorSW {
+            devices: displays,
+            buffer: [0; MAX_DISPLAYS * 2],
+            spi,
+            cs,
+        }
+    }
+}
+
+impl<SPI, CS> Connector for SpiConnectorSW<SPI, CS>
+where
+    SPI: Write<u8>,
+    CS: OutputPin,
+    PinError: core::convert::From<SPI::Error>,
+    PinError: core::convert::From<CS::Error>,
+{
+    fn devices(&self) -> usize {
+        self.devices
+    }
+
+    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), PinError> {
+        let offset = addr * 2;
+        let max_bytes = self.devices * 2;
+        self.buffer = [0; MAX_DISPLAYS * 2];
+
+        self.buffer[offset] = header;
+        self.buffer[offset + 1] = data;
+
+        self.cs.set_low()?;
+        self.spi.write(&self.buffer[0..max_bytes])?;
+        self.cs.set_high()?;
 
         Ok(())
     }

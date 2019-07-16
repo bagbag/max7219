@@ -313,7 +313,39 @@ where
     PinError: core::convert::From<SPI::Error>,
 {
     ///
-    /// Construct a new MAX7219 driver instance from pre-existing SPI.
+    /// Construct a new MAX7219 driver instance from pre-existing SPI in full hardware mode.
+    /// The SPI will control CS (LOAD) line according to it's internal mode set.
+    /// If you need the CS line to be controlled manually use MAX7219::from_spi_cs
+    /// 
+    /// * `NOTE` - make sure the SPI is initialized in MODE_0 with max 10 Mhz frequency.
+    ///
+    /// # Arguments
+    ///
+    /// * `displays` - number of displays connected in series
+    /// * `spi` - the SPI interface initialized with MOSI, MISO(unused) and CLK
+    ///
+    /// # Errors
+    ///
+    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    ///
+    pub fn from_spi(displays: usize, spi: SPI) -> Result<Self, PinError> {
+        MAX7219::new(SpiConnector::new(displays, spi))
+    }
+}
+
+impl<SPI, CS> MAX7219<SpiConnectorSW<SPI, CS>>
+where
+    SPI: Write<u8>,
+    CS: OutputPin,
+    PinError: core::convert::From<()>,
+    PinError: core::convert::From<SPI::Error>,
+    PinError: core::convert::From<CS::Error>,
+{
+    ///
+    /// Construct a new MAX7219 driver instance from pre-existing SPI and CS pin
+    /// set to output. This version of the connection uses the CS pin manually
+    /// to avoid issues with how the CS mode is handled in hardware SPI implementations.
+    /// 
     /// * `NOTE` - make sure the SPI is initialized in MODE_0 with max 10 Mhz frequency.
     ///
     /// # Arguments
@@ -326,8 +358,8 @@ where
     ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     ///
-    pub fn from_spi(displays: usize, spi: SPI) -> Result<Self, PinError> {
-        MAX7219::new(SpiConnector::new(displays, spi))
+    pub fn from_spi_cs(displays: usize, spi: SPI, cs: CS) -> Result<Self, PinError> {
+        MAX7219::new(SpiConnectorSW::new(displays, spi, cs))
     }
 }
 
@@ -359,6 +391,7 @@ fn ssb_byte(b: u8, dot: bool) -> u8 {
         ' ' => 0b00000000, // "blank"
         '.' => 0b10000000,
         '-' => 0b00000001, // -
+        '_' => 0b00001000, // _
         '0' => 0b01111110,
         '1' => 0b00110000,
         '2' => 0b01101101,
