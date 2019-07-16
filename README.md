@@ -9,6 +9,7 @@
 - Powering on/off the MAX chip
 - Basic commands for setting LEDs on/off.
 - Chaining support (max 8 devices)
+- Hardware SPI support (with or without CS pin)
 
 ## Example
 
@@ -21,27 +22,24 @@ extern crate panic_halt;
 
 use riscv_rt::entry;
 use hifive1::hal::prelude::*;
-use hifive1::hal::e310x::Peripherals;
+use hifive1::hal::DeviceResources;
+use hifive1::pin;
 use max7219::*;
 
 #[entry]
 fn main() -> ! {
-    let p = Peripherals::take().unwrap();
+    let dr = DeviceResources::take().unwrap();
+    let p = dr.peripherals;
+    let gpio = dr.pins;
 
     // Configure clocks
     hifive1::clock::configure(p.PRCI, p.AONCLK, 320.mhz().into());
+    
+    let data = pin!(gpio, spi0_mosi).into_output();
+    let sck = pin!(gpio, spi0_sck).into_output();
+    let cs = pin!(gpio, spi0_ss0).into_output();
 
-    // Configure SPI pins
-    let mut gpio = p.GPIO0.split();
-
-    let data = gpio.pin3.into_output(&mut gpio.output_en, &mut gpio.drive,
-                                     &mut gpio.out_xor, &mut gpio.iof_en);
-    let sck = gpio.pin5.into_output(&mut gpio.output_en, &mut gpio.drive,
-                                    &mut gpio.out_xor, &mut gpio.iof_en);
-    let cs = gpio.pin2.into_output(&mut gpio.output_en, &mut gpio.drive,
-                                   &mut gpio.out_xor, &mut gpio.iof_en);
-
-    let mut display = MAX7219::new(1, data, cs, sck).unwrap();
+    let mut display = MAX7219::from_pins(1, data, cs, sck).unwrap();
 
     // make sure to wake the display up
     display.power_on().unwrap();
