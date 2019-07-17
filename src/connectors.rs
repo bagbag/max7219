@@ -167,9 +167,7 @@ where
     SPI: Write<u8>,
     CS: OutputPin,
 {
-    devices: usize,
-    buffer: [u8; MAX_DISPLAYS * 2],
-    spi: SPI,
+    spi_c: SpiConnector<SPI>,
     cs: CS,
 }
 
@@ -180,9 +178,7 @@ where
 {
     pub(crate) fn new(displays: usize, spi: SPI, cs: CS) -> Self {
         SpiConnectorSW {
-            devices: displays,
-            buffer: [0; MAX_DISPLAYS * 2],
-            spi,
+            spi_c: SpiConnector::new(displays, spi),
             cs,
         }
     }
@@ -196,19 +192,12 @@ where
     PinError: core::convert::From<CS::Error>,
 {
     fn devices(&self) -> usize {
-        self.devices
+        self.spi_c.devices
     }
 
     fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), PinError> {
-        let offset = addr * 2;
-        let max_bytes = self.devices * 2;
-        self.buffer = [0; MAX_DISPLAYS * 2];
-
-        self.buffer[offset] = header;
-        self.buffer[offset + 1] = data;
-
         self.cs.set_low()?;
-        self.spi.write(&self.buffer[0..max_bytes])?;
+        self.spi_c.write_raw(addr, header, data)?;
         self.cs.set_high()?;
 
         Ok(())
