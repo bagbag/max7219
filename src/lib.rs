@@ -190,13 +190,13 @@ where
         self.set_decode_mode(0, DecodeMode::NoDecode)?;
 
         let mut digit: u8 = MAX_DIGITS as u8;
-        let mut dot_product: u8 = 0b10000000;
+        let mut dot_product: u8 = 0b1000_0000;
         for b in string {
             let dot = (dots & dot_product) > 0;
-            dot_product = dot_product >> 1;
+            dot_product >>= 1;
             self.c.write_raw(addr, digit, ssb_byte(*b, dot))?;
 
-            digit = digit - 1;
+            digit -= 1;
         }
 
         self.set_decode_mode(0, prev_dm)?;
@@ -226,7 +226,7 @@ where
         for b in bcd {
             self.c.write_raw(addr, digit, bcd_byte(*b))?;
 
-            digit = digit - 1;
+            digit -= 1;
         }
 
         self.set_decode_mode(0, prev_dm)?;
@@ -369,16 +369,16 @@ where
 ///
 fn bcd_byte(b: u8) -> u8 {
     match b as char {
-        ' ' => 0b00001111, // "blank"
-        '-' => 0b00001010, // - without .
-        'e' => 0b00001011, // E without .
-        'E' => 0b10001011, // E with .
-        'h' => 0b00001100, // H without .
-        'H' => 0b10001100, // H with .
-        'l' => 0b00001101, // L without .
-        'L' => 0b10001101, // L with .
-        'p' => 0b00001110, // L without .
-        'P' => 0b10001110, // L with .
+        ' ' => 0b0000_1111, // "blank"
+        '-' => 0b0000_1010, // - without .
+        'e' => 0b0000_1011, // E without .
+        'E' => 0b1000_1011, // E with .
+        'h' => 0b0000_1100, // H without .
+        'H' => 0b1000_1100, // H with .
+        'l' => 0b0000_1101, // L without .
+        'L' => 0b1000_1101, // L with .
+        'p' => 0b0000_1110, // L without .
+        'P' => 0b1000_1110, // L with .
         _ => b,
     }
 }
@@ -388,51 +388,51 @@ fn bcd_byte(b: u8) -> u8 {
 ///
 fn ssb_byte(b: u8, dot: bool) -> u8 {
     let mut result = match b as char {
-        ' ' => 0b00000000, // "blank"
-        '.' => 0b10000000,
-        '-' => 0b00000001, // -
-        '_' => 0b00001000, // _
-        '0' => 0b01111110,
-        '1' => 0b00110000,
-        '2' => 0b01101101,
-        '3' => 0b01111001,
-        '4' => 0b00110011,
-        '5' => 0b01011011,
-        '6' => 0b01011111,
-        '7' => 0b01110000,
-        '8' => 0b01111111,
-        '9' => 0b01111011,
-        'a' | 'A' => 0b01110111,
-        'b' => 0b00011111,
-        'c' | 'C' => 0b01001110,
-        'd' => 0b00111101,
-        'e' | 'E' => 0b01001111,
-        'f' | 'F' => 0b01000111,
-        'g' | 'G' => 0b01011110,
-        'h' | 'H' => 0b00110111,
-        'i' | 'I' => 0b00110000,
-        'j' | 'J' => 0b00111100,
+        ' ' => 0b0000_0000, // "blank"
+        '.' => 0b1000_0000,
+        '-' => 0b0000_0001, // -
+        '_' => 0b0000_1000, // _
+        '0' => 0b0111_1110,
+        '1' => 0b0011_0000,
+        '2' => 0b0110_1101,
+        '3' => 0b0111_1001,
+        '4' => 0b0011_0011,
+        '5' => 0b0101_1011,
+        '6' => 0b0101_1111,
+        '7' => 0b0111_0000,
+        '8' => 0b0111_1111,
+        '9' => 0b0111_1011,
+        'a' | 'A' => 0b0111_0111,
+        'b' => 0b0001_1111,
+        'c' | 'C' => 0b0100_1110,
+        'd' => 0b0011_1101,
+        'e' | 'E' => 0b0100_1111,
+        'f' | 'F' => 0b0100_0111,
+        'g' | 'G' => 0b0101_1110,
+        'h' | 'H' => 0b0011_0111,
+        'i' | 'I' => 0b0011_0000,
+        'j' | 'J' => 0b0011_1100,
         // K undoable
-        'l' | 'L' => 0b00001110,
+        'l' | 'L' => 0b0000_1110,
         // M undoable
         // N undoable
-        'o' | 'O' => 0b01111110,
-        'p' | 'P' => 0b01100111,
-        'q' => 0b01110011,
+        'o' | 'O' => 0b0111_1110,
+        'p' | 'P' => 0b0110_0111,
+        'q' => 0b0111_0011,
         // R undoable
-        's' | 'S' => 0b01011011,
+        's' | 'S' => 0b0101_1011,
         // T undoable
-        'u' | 'U' => 0b00111110,
+        'u' | 'U' => 0b0011_1110,
         // V undoable
         // W undoable
         // X undoable
         // Y undoable
         // Z undoable
-        _ => 0b11100101, // ?
+        _ => 0b1110_0101, // ?
     };
 
     if dot {
-        result = result | 0b10000000; // turn "." on
+        result |= 0b1000_0000; // turn "." on
     }
 
     result
