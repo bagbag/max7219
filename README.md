@@ -13,6 +13,8 @@
 
 ## Example
 
+Example projects are at [this repo](https://github.com/almindor/max7219-examples)
+
 Here is a simple example for using the MAX7219 on a hifive1-revb device with e310x_hal:
 ```rust
 #![no_std]
