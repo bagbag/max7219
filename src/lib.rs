@@ -13,7 +13,7 @@ extern crate embedded_hal;
 use embedded_hal::blocking::spi::Write;
 use embedded_hal::digital::v2::OutputPin;
 
-mod connectors;
+pub mod connectors;
 use connectors::*;
 
 /// Maximum number of displays connected in series supported by this lib.
@@ -316,7 +316,7 @@ where
     /// Construct a new MAX7219 driver instance from pre-existing SPI in full hardware mode.
     /// The SPI will control CS (LOAD) line according to it's internal mode set.
     /// If you need the CS line to be controlled manually use MAX7219::from_spi_cs
-    /// 
+    ///
     /// * `NOTE` - make sure the SPI is initialized in MODE_0 with max 10 Mhz frequency.
     ///
     /// # Arguments
@@ -345,7 +345,7 @@ where
     /// Construct a new MAX7219 driver instance from pre-existing SPI and CS pin
     /// set to output. This version of the connection uses the CS pin manually
     /// to avoid issues with how the CS mode is handled in hardware SPI implementations.
-    /// 
+    ///
     /// * `NOTE` - make sure the SPI is initialized in MODE_0 with max 10 Mhz frequency.
     ///
     /// # Arguments
