@@ -11,6 +11,8 @@
 - Chaining support (max 8 devices)
 - Hardware SPI support (with or without CS pin)
 
+## [Changelog](CHANGELOG.md)
+
 ## Example
 
 Example projects are at [this repo](https://github.com/almindor/max7219-examples)
