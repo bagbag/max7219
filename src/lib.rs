@@ -13,7 +13,7 @@ extern crate embedded_hal;
 use embedded_hal::blocking::spi::Write;
 use embedded_hal::digital::v2::OutputPin;
 
-mod connectors;
+pub mod connectors;
 use connectors::*;
 
 /// Maximum number of displays connected in series supported by this lib.
@@ -234,6 +234,34 @@ where
         Ok(())
     }
 
+
+    ///
+    /// Writes a raw value to the display
+    ///
+    /// # Arguments
+    ///
+    /// * `addr` - display to address as connected in series (0 -> last)
+    /// * `raw` - an array of raw bytes to write. Each bit represents a pixel on the display
+    ///
+    /// # Errors
+    ///
+    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    ///
+    pub fn write_raw(&mut self, addr: usize, raw: &[u8; MAX_DIGITS]) -> Result<(), PinError> {
+        let prev_dm = self.decode_mode;
+        self.set_decode_mode(0, DecodeMode::NoDecode)?;
+
+        let mut digit: u8 = 0;
+        for b in raw {
+            self.c.write_raw(addr, digit, *b)?;
+            digit += 1;
+        }
+
+        self.set_decode_mode(0, prev_dm)?;
+
+        Ok(())
+    }
+
     ///
     /// Set test mode on/off
     ///
@@ -316,7 +344,7 @@ where
     /// Construct a new MAX7219 driver instance from pre-existing SPI in full hardware mode.
     /// The SPI will control CS (LOAD) line according to it's internal mode set.
     /// If you need the CS line to be controlled manually use MAX7219::from_spi_cs
-    /// 
+    ///
     /// * `NOTE` - make sure the SPI is initialized in MODE_0 with max 10 Mhz frequency.
     ///
     /// # Arguments
@@ -345,7 +373,7 @@ where
     /// Construct a new MAX7219 driver instance from pre-existing SPI and CS pin
     /// set to output. This version of the connection uses the CS pin manually
     /// to avoid issues with how the CS mode is handled in hardware SPI implementations.
-    /// 
+    ///
     /// * `NOTE` - make sure the SPI is initialized in MODE_0 with max 10 Mhz frequency.
     ///
     /// # Arguments
