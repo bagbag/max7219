@@ -234,6 +234,34 @@ where
         Ok(())
     }
 
+
+    ///
+    /// Writes a raw value to the display
+    ///
+    /// # Arguments
+    ///
+    /// * `addr` - display to address as connected in series (0 -> last)
+    /// * `raw` - an array of raw bytes to write. Each bit represents a pixel on the display
+    ///
+    /// # Errors
+    ///
+    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    ///
+    pub fn write_raw(&mut self, addr: usize, raw: &[u8; MAX_DIGITS]) -> Result<(), PinError> {
+        let prev_dm = self.decode_mode;
+        self.set_decode_mode(0, DecodeMode::NoDecode)?;
+
+        let mut digit: u8 = 0;
+        for b in raw {
+            self.c.write_raw(addr, digit, *b)?;
+            digit += 1;
+        }
+
+        self.set_decode_mode(0, prev_dm)?;
+
+        Ok(())
+    }
+
     ///
     /// Set test mode on/off
     ///
