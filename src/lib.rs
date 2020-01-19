@@ -251,7 +251,7 @@ where
         let prev_dm = self.decode_mode;
         self.set_decode_mode(0, DecodeMode::NoDecode)?;
 
-        let mut digit: u8 = 0;
+        let mut digit: u8 = 1;
         for b in raw {
             self.c.write_raw(addr, digit, *b)?;
             digit += 1;
