@@ -1,5 +1,9 @@
 # CHANGELOG
 
+### 0.3.0
+
+Refactor `PinError` into `DataError` removing `From` requirements.
+
 ### 0.2.2
 
 Fix addressing bug in `write_raw` method.
