@@ -3,7 +3,7 @@ extern crate embedded_hal;
 use embedded_hal::blocking::spi::Write;
 use embedded_hal::digital::v2::OutputPin;
 
-use crate::{Command, PinError, MAX_DISPLAYS};
+use crate::{Command, DataError, MAX_DISPLAYS};
 
 /// Describes the interface used to connect to the MX7219
 pub trait Connector {
@@ -22,7 +22,7 @@ pub trait Connector {
     ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     ///
-    fn write_data(&mut self, addr: usize, command: Command, data: u8) -> Result<(), PinError> {
+    fn write_data(&mut self, addr: usize, command: Command, data: u8) -> Result<(), DataError> {
         self.write_raw(addr, command as u8, data)
     }
 
@@ -39,7 +39,7 @@ pub trait Connector {
     ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     ///
-    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), PinError>;
+    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError>;
 }
 
 /// Direct GPIO pins connector
@@ -78,15 +78,12 @@ where
     DATA: OutputPin,
     CS: OutputPin,
     SCK: OutputPin,
-    PinError: core::convert::From<DATA::Error>,
-    PinError: core::convert::From<CS::Error>,
-    PinError: core::convert::From<SCK::Error>,
 {
     fn devices(&self) -> usize {
         self.devices
     }
 
-    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), PinError> {
+    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError> {
         let offset = addr * 2;
         let max_bytes = self.devices * 2;
         self.buffer = [0; MAX_DISPLAYS * 2];
@@ -94,22 +91,22 @@ where
         self.buffer[offset] = header;
         self.buffer[offset + 1] = data;
 
-        self.cs.set_low()?;
+        self.cs.set_low().map_err(|_| DataError::Pin)?;
         for b in 0..max_bytes {
             let value = self.buffer[b];
 
             for i in 0..8 {
                 if value & (1 << (7 - i)) > 0 {
-                    self.data.set_high()?;
+                    self.data.set_high().map_err(|_| DataError::Pin)?;
                 } else {
-                    self.data.set_low()?;
+                    self.data.set_low().map_err(|_| DataError::Pin)?;
                 }
 
-                self.sck.set_high()?;
-                self.sck.set_low()?;
+                self.sck.set_high().map_err(|_| DataError::Pin)?;
+                self.sck.set_low().map_err(|_| DataError::Pin)?;
             }
         }
-        self.cs.set_high()?;
+        self.cs.set_high().map_err(|_| DataError::Pin)?;
 
         Ok(())
     }
@@ -141,13 +138,12 @@ where
 impl<SPI> Connector for SpiConnector<SPI>
 where
     SPI: Write<u8>,
-    PinError: core::convert::From<SPI::Error>,
 {
     fn devices(&self) -> usize {
         self.devices
     }
 
-    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), PinError> {
+    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError> {
         let offset = addr * 2;
         let max_bytes = self.devices * 2;
         self.buffer = [0; MAX_DISPLAYS * 2];
@@ -155,7 +151,7 @@ where
         self.buffer[offset] = header;
         self.buffer[offset + 1] = data;
 
-        self.spi.write(&self.buffer[0..max_bytes])?;
+        self.spi.write(&self.buffer[0..max_bytes]).map_err(|_| DataError::Spi)?;
 
         Ok(())
     }
@@ -188,17 +184,15 @@ impl<SPI, CS> Connector for SpiConnectorSW<SPI, CS>
 where
     SPI: Write<u8>,
     CS: OutputPin,
-    PinError: core::convert::From<SPI::Error>,
-    PinError: core::convert::From<CS::Error>,
 {
     fn devices(&self) -> usize {
         self.spi_c.devices
     }
 
-    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), PinError> {
-        self.cs.set_low()?;
-        self.spi_c.write_raw(addr, header, data)?;
-        self.cs.set_high()?;
+    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError> {
+        self.cs.set_low().map_err(|_| DataError::Pin)?;
+        self.spi_c.write_raw(addr, header, data).map_err(|_| DataError::Spi)?;
+        self.cs.set_high().map_err(|_| DataError::Pin)?;
 
         Ok(())
     }

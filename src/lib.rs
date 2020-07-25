@@ -51,22 +51,15 @@ pub enum DecodeMode {
 }
 
 ///
-/// Error raised in case there was a PIN interaction
-/// error during communication with the MAX7219 chip.
+/// Error raised in case there was an error
+/// during communication with the MAX7219 chip.
 ///
 #[derive(Debug)]
-pub struct PinError;
-
-impl From<core::convert::Infallible> for PinError {
-    fn from(_: core::convert::Infallible) -> Self {
-        PinError {}
-    }
-}
-
-impl From<()> for PinError {
-    fn from(_: ()) -> Self {
-        PinError {}
-    }
+pub enum DataError {
+    /// An error occurred when working with SPI
+    Spi,
+    /// An error occurred when working with a PIN
+    Pin,
 }
 
 ///
@@ -92,7 +85,7 @@ where
     ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     ///
-    pub fn power_on(&mut self) -> Result<(), PinError> {
+    pub fn power_on(&mut self) -> Result<(), DataError> {
         for i in 0..self.c.devices() {
             self.c.write_data(i, Command::Power, 0x01)?;
         }
@@ -107,7 +100,7 @@ where
     ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     ///
-    pub fn power_off(&mut self) -> Result<(), PinError> {
+    pub fn power_off(&mut self) -> Result<(), DataError> {
         for i in 0..self.c.devices() {
             self.c.write_data(i, Command::Power, 0x00)?;
         }
@@ -126,7 +119,7 @@ where
     ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     ///
-    pub fn clear_display(&mut self, addr: usize) -> Result<(), PinError> {
+    pub fn clear_display(&mut self, addr: usize) -> Result<(), DataError> {
         for i in 1..9 {
             self.c.write_raw(addr, i, 0x00)?;
         }
@@ -146,7 +139,7 @@ where
     ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     ///
-    pub fn set_intensity(&mut self, addr: usize, intensity: u8) -> Result<(), PinError> {
+    pub fn set_intensity(&mut self, addr: usize, intensity: u8) -> Result<(), DataError> {
         self.c.write_data(addr, Command::Intensity, intensity)
     }
 
@@ -162,7 +155,7 @@ where
     ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     ///
-    pub fn set_decode_mode(&mut self, addr: usize, mode: DecodeMode) -> Result<(), PinError> {
+    pub fn set_decode_mode(&mut self, addr: usize, mode: DecodeMode) -> Result<(), DataError> {
         self.decode_mode = mode; // store what we set
         self.c.write_data(addr, Command::DecodeMode, mode as u8)
     }
@@ -185,7 +178,7 @@ where
         addr: usize,
         string: &[u8; MAX_DIGITS],
         dots: u8,
-    ) -> Result<(), PinError> {
+    ) -> Result<(), DataError> {
         let prev_dm = self.decode_mode;
         self.set_decode_mode(0, DecodeMode::NoDecode)?;
 
@@ -218,7 +211,7 @@ where
     ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     ///
-    pub fn write_bcd(&mut self, addr: usize, bcd: &[u8; MAX_DIGITS]) -> Result<(), PinError> {
+    pub fn write_bcd(&mut self, addr: usize, bcd: &[u8; MAX_DIGITS]) -> Result<(), DataError> {
         let prev_dm = self.decode_mode;
         self.set_decode_mode(0, DecodeMode::CodeBDigits7_0)?;
 
@@ -247,7 +240,7 @@ where
     ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     ///
-    pub fn write_raw(&mut self, addr: usize, raw: &[u8; MAX_DIGITS]) -> Result<(), PinError> {
+    pub fn write_raw(&mut self, addr: usize, raw: &[u8; MAX_DIGITS]) -> Result<(), DataError> {
         let prev_dm = self.decode_mode;
         self.set_decode_mode(0, DecodeMode::NoDecode)?;
 
@@ -274,7 +267,7 @@ where
     ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     ///
-    pub fn test(&mut self, addr: usize, is_on: bool) -> Result<(), PinError> {
+    pub fn test(&mut self, addr: usize, is_on: bool) -> Result<(), DataError> {
         if is_on {
             self.c.write_data(addr, Command::DisplayTest, 0x01)
         } else {
@@ -283,7 +276,7 @@ where
     }
 
     // internal constructor, users should call ::from_pins or ::from_spi
-    fn new(connector: CONNECTOR) -> Result<Self, PinError> {
+    fn new(connector: CONNECTOR) -> Result<Self, DataError> {
         let mut max7219 = MAX7219 {
             c: connector,
             decode_mode: DecodeMode::NoDecode,
@@ -293,7 +286,7 @@ where
         Ok(max7219)
     }
 
-    fn init(&mut self) -> Result<(), PinError> {
+    fn init(&mut self) -> Result<(), DataError> {
         for i in 0..self.c.devices() {
             self.test(i, false)?; // turn testmode off
             self.c.write_data(i, Command::ScanLimit, 0x07)?; // set scanlimit
@@ -311,9 +304,6 @@ where
     DATA: OutputPin,
     CS: OutputPin,
     SCK: OutputPin,
-    PinError: core::convert::From<DATA::Error>,
-    PinError: core::convert::From<CS::Error>,
-    PinError: core::convert::From<SCK::Error>,
 {
     ///
     /// Construct a new MAX7219 driver instance from DATA, CS and SCK pins.
@@ -329,7 +319,7 @@ where
     ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     ///
-    pub fn from_pins(displays: usize, data: DATA, cs: CS, sck: SCK) -> Result<Self, PinError> {
+    pub fn from_pins(displays: usize, data: DATA, cs: CS, sck: SCK) -> Result<Self, DataError> {
         MAX7219::new(PinConnector::new(displays, data, cs, sck))
     }
 }
@@ -337,8 +327,6 @@ where
 impl<SPI> MAX7219<SpiConnector<SPI>>
 where
     SPI: Write<u8>,
-    PinError: core::convert::From<()>,
-    PinError: core::convert::From<SPI::Error>,
 {
     ///
     /// Construct a new MAX7219 driver instance from pre-existing SPI in full hardware mode.
@@ -356,7 +344,7 @@ where
     ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     ///
-    pub fn from_spi(displays: usize, spi: SPI) -> Result<Self, PinError> {
+    pub fn from_spi(displays: usize, spi: SPI) -> Result<Self, DataError> {
         MAX7219::new(SpiConnector::new(displays, spi))
     }
 }
@@ -365,9 +353,6 @@ impl<SPI, CS> MAX7219<SpiConnectorSW<SPI, CS>>
 where
     SPI: Write<u8>,
     CS: OutputPin,
-    PinError: core::convert::From<()>,
-    PinError: core::convert::From<SPI::Error>,
-    PinError: core::convert::From<CS::Error>,
 {
     ///
     /// Construct a new MAX7219 driver instance from pre-existing SPI and CS pin
@@ -386,7 +371,7 @@ where
     ///
     /// * `PinError` - returned in case there was an error setting a PIN on the device
     ///
-    pub fn from_spi_cs(displays: usize, spi: SPI, cs: CS) -> Result<Self, PinError> {
+    pub fn from_spi_cs(displays: usize, spi: SPI, cs: CS) -> Result<Self, DataError> {
         MAX7219::new(SpiConnectorSW::new(displays, spi, cs))
     }
 }
