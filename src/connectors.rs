@@ -20,7 +20,7 @@ pub trait Connector {
     ///
     /// # Errors
     ///
-    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    /// * `DataError` - returned in case there was an error during data transfer
     ///
     fn write_data(&mut self, addr: usize, command: Command, data: u8) -> Result<(), DataError> {
         self.write_raw(addr, command as u8, data)
@@ -37,7 +37,7 @@ pub trait Connector {
     ///
     /// # Errors
     ///
-    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    /// * `DataError` - returned in case there was an error during data transfer
     ///
     fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError>;
 }
@@ -151,7 +151,9 @@ where
         self.buffer[offset] = header;
         self.buffer[offset + 1] = data;
 
-        self.spi.write(&self.buffer[0..max_bytes]).map_err(|_| DataError::Spi)?;
+        self.spi
+            .write(&self.buffer[0..max_bytes])
+            .map_err(|_| DataError::Spi)?;
 
         Ok(())
     }
@@ -191,7 +193,9 @@ where
 
     fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError> {
         self.cs.set_low().map_err(|_| DataError::Pin)?;
-        self.spi_c.write_raw(addr, header, data).map_err(|_| DataError::Spi)?;
+        self.spi_c
+            .write_raw(addr, header, data)
+            .map_err(|_| DataError::Spi)?;
         self.cs.set_high().map_err(|_| DataError::Pin)?;
 
         Ok(())

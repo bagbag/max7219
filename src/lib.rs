@@ -83,7 +83,7 @@ where
     ///
     /// # Errors
     ///
-    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    /// * `DataError` - returned in case there was an error during data transfer
     ///
     pub fn power_on(&mut self) -> Result<(), DataError> {
         for i in 0..self.c.devices() {
@@ -98,7 +98,7 @@ where
     ///
     /// # Errors
     ///
-    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    /// * `DataError` - returned in case there was an error during data transfer
     ///
     pub fn power_off(&mut self) -> Result<(), DataError> {
         for i in 0..self.c.devices() {
@@ -117,7 +117,7 @@ where
     ///
     /// # Errors
     ///
-    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    /// * `DataError` - returned in case there was an error during data transfer
     ///
     pub fn clear_display(&mut self, addr: usize) -> Result<(), DataError> {
         for i in 1..9 {
@@ -137,7 +137,7 @@ where
     ///
     /// # Errors
     ///
-    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    /// * `DataError` - returned in case there was an error during data transfer
     ///
     pub fn set_intensity(&mut self, addr: usize, intensity: u8) -> Result<(), DataError> {
         self.c.write_data(addr, Command::Intensity, intensity)
@@ -153,7 +153,7 @@ where
     ///
     /// # Errors
     ///
-    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    /// * `DataError` - returned in case there was an error during data transfer
     ///
     pub fn set_decode_mode(&mut self, addr: usize, mode: DecodeMode) -> Result<(), DataError> {
         self.decode_mode = mode; // store what we set
@@ -171,7 +171,7 @@ where
     ///
     /// # Errors
     ///
-    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    /// * `DataError` - returned in case there was an error during data transfer
     ///
     pub fn write_str(
         &mut self,
@@ -209,7 +209,7 @@ where
     ///
     /// # Errors
     ///
-    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    /// * `DataError` - returned in case there was an error during data transfer
     ///
     pub fn write_bcd(&mut self, addr: usize, bcd: &[u8; MAX_DIGITS]) -> Result<(), DataError> {
         let prev_dm = self.decode_mode;
@@ -227,7 +227,6 @@ where
         Ok(())
     }
 
-
     ///
     /// Writes a raw value to the display
     ///
@@ -238,7 +237,7 @@ where
     ///
     /// # Errors
     ///
-    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    /// * `DataError` - returned in case there was an error during data transfer
     ///
     pub fn write_raw(&mut self, addr: usize, raw: &[u8; MAX_DIGITS]) -> Result<(), DataError> {
         let prev_dm = self.decode_mode;
@@ -265,7 +264,7 @@ where
     ///
     /// # Errors
     ///
-    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    /// * `DataError` - returned in case there was an error during data transfer
     ///
     pub fn test(&mut self, addr: usize, is_on: bool) -> Result<(), DataError> {
         if is_on {
@@ -317,7 +316,7 @@ where
     ///
     /// # Errors
     ///
-    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    /// * `DataError` - returned in case there was an error during data transfer
     ///
     pub fn from_pins(displays: usize, data: DATA, cs: CS, sck: SCK) -> Result<Self, DataError> {
         MAX7219::new(PinConnector::new(displays, data, cs, sck))
@@ -342,7 +341,7 @@ where
     ///
     /// # Errors
     ///
-    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    /// * `DataError` - returned in case there was an error during data transfer
     ///
     pub fn from_spi(displays: usize, spi: SPI) -> Result<Self, DataError> {
         MAX7219::new(SpiConnector::new(displays, spi))
@@ -369,7 +368,7 @@ where
     ///
     /// # Errors
     ///
-    /// * `PinError` - returned in case there was an error setting a PIN on the device
+    /// * `DataError` - returned in case there was an error during data transfer
     ///
     pub fn from_spi_cs(displays: usize, spi: SPI, cs: CS) -> Result<Self, DataError> {
         MAX7219::new(SpiConnectorSW::new(displays, spi, cs))
