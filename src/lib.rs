@@ -427,7 +427,7 @@ fn ssb_byte(b: u8, dot: bool) -> u8 {
         // K undoable
         'l' | 'L' => 0b0000_1110,
         // M undoable
-        // N undoable
+        'n' | 'N' => 0b0001_0101,
         'o' | 'O' => 0b0111_1110,
         'p' | 'P' => 0b0110_0111,
         'q' => 0b0111_0011,
