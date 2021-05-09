@@ -1,5 +1,9 @@
 # CHANGELOG
 
+### 0.3.1
+
+Add support for letter `n`.
+
 ### 0.3.0
 
 Refactor `PinError` into `DataError` removing `From` requirements.
