@@ -536,8 +536,8 @@ fn hex_bytes(mut n: i32, buf: &mut [u8]) -> &[u8] {
     if n == 0 {
         return b"0";
     }
-    // don't overflow the display
-    if n >= 99999999 || n <= -999999 {
+    // don't overflow the display ( 0xFFFFFFF)
+    if n <= -268435455 {
         return b"Err";
     }
     let mut i = 0;
