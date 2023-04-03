@@ -228,6 +228,48 @@ where
     }
 
     ///
+    /// Writes a right justified integer with sign
+    ///
+    /// # Arguments
+    /// 
+    /// * `addr` - display to address as connected in series (0 -> last)
+    /// * `val` - an integer i32
+    /// 
+    /// # Errors
+    /// 
+    /// * `DataError` - returned in case there was an integer over flow
+    /// 
+    pub fn write_integer(&mut self, addr: usize, value: i32) -> Result<(), DataError>
+    {
+        let mut buf = [0u8; 8];
+        let j = base_10_bytes(value, &mut buf);
+        buf = pad_left(j);
+        self.write_str(addr, &mut buf, 0b00000000)?;
+        Ok(())
+    }
+    
+    ///
+    /// Writes a right justified hex formatted integer with sign
+    ///
+    /// # Arguments
+    /// 
+    /// * `addr` - display to address as connected in series (0 -> last)
+    /// * `val` - an integer i32
+    /// 
+    /// # Errors
+    /// 
+    /// * `DataError` - returned in case there was an integer over flow
+    /// 
+    pub fn write_hex(&mut self, addr: usize, value: i32) -> Result<(), DataError>
+    {
+        let mut buf = [0u8; 8];
+        let j = hex_bytes(value, &mut buf);
+        buf = pad_left(j);
+        self.write_str(addr, &mut buf, 0b00000000)?;
+        Ok(())
+    }
+
+    ///
     /// Writes a raw value to the display
     ///
     /// # Arguments
@@ -448,4 +490,102 @@ fn ssb_byte(b: u8, dot: bool) -> u8 {
     }
 
     result
+}
+
+///
+/// Convert the integer into an integer byte Sequence
+/// 
+fn base_10_bytes(mut n: i32, buf: &mut [u8]) -> &[u8] {
+    let mut sign: bool = false;
+    if n < 0 {
+        n = -n;
+        sign = true;
+    }
+    if n == 0 {
+        return b"0";
+    }
+    // don't overflow the display
+    if n >= 99999999 || n <= -999999 {
+        return b"Err";
+    }
+    let mut i = 0;
+    while n > 0 {
+        buf[i] = (n % 10) as u8 + b'0';
+        n /= 10;
+        i += 1;
+    }
+    if sign {
+        buf[i] = b'-';
+        i += 1;
+    }
+    let slice = &mut buf[..i];
+    slice.reverse();
+    &*slice
+}
+
+
+//
+/// Convert the integer into a hexidecimal byte Sequence
+/// 
+fn hex_bytes(mut n: i32, buf: &mut [u8]) -> &[u8] {
+    let mut sign: bool = false;
+    if n < 0 {
+        n = -n;
+        sign = true;
+    }
+    if n == 0 {
+        return b"0";
+    }
+    // don't overflow the display
+    if n >= 99999999 || n <= -999999 {
+        return b"Err";
+    }
+    let mut i = 0;
+    while n > 0 {
+        let digit = (n % 16 ) as u8;
+        buf[i] =match digit { 
+            0 => b'0',
+            1 => b'1',
+            2 => b'2',
+            3 => b'3',
+            4 => b'4',
+            5 => b'5',
+            6 => b'6',
+            7 => b'7',
+            8 => b'8',
+            9 => b'9',
+            10 => b'a',
+            11 => b'b',
+            12 => b'c',
+            13 => b'd',
+            14 => b'e',
+            15 => b'f',
+            _ => b'?'
+        };
+        n /= 16;
+        i += 1;
+    }
+    if sign {
+        buf[i] = b'-';
+        i += 1;
+    }
+    let slice = &mut buf[..i];
+    slice.reverse();
+    &*slice
+}
+
+///
+/// Take a byte slice and pad the left hand side
+/// 
+fn pad_left(val: &[u8]) -> [u8; 8] {
+    assert!(val.len() < 8);
+    let size: usize = 8;
+    let pos: usize = val.len();
+    let mut cur: usize = 1;
+    let mut out: [u8; 8] = *b"        ";
+    while cur <= pos {
+        out[size - cur] = val[pos - cur];
+        cur += 1;
+    }
+    out
 }
