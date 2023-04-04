@@ -1,5 +1,10 @@
 # CHANGELOG
 
+### 0.3.2 (unreleased)
+
+Add support for integer display in decimal and hex for i32 
+Credit goes to [zignig](https://github.com/zignig)
+
 ### 0.3.1
 
 Add support for letter `n`.
