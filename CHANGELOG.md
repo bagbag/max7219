@@ -1,6 +1,6 @@
 # CHANGELOG
 
-### 0.3.2 (unreleased)
+### 0.4.0
 
 Add support for integer display in decimal and hex for i32 
 Credit goes to [zignig](https://github.com/zignig)
