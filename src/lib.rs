@@ -259,7 +259,7 @@ where
     ///
     /// * `DataError` - returned in case there was an integer over flow
     ///
-    pub fn write_hex(&mut self, addr: usize, value: i32) -> Result<(), DataError> {
+    pub fn write_hex(&mut self, addr: usize, value: u32) -> Result<(), DataError> {
         let mut buf = [0u8; 8];
         let j = hex_bytes(value, &mut buf);
         buf = pad_left(j);
@@ -524,16 +524,8 @@ fn base_10_bytes(mut n: i32, buf: &mut [u8]) -> &[u8] {
 //
 /// Convert the integer into a hexidecimal byte Sequence
 ///
-fn hex_bytes(mut n: i32, buf: &mut [u8]) -> &[u8] {
-    let mut sign: bool = false;
+fn hex_bytes(mut n: u32 , buf: &mut [u8]) -> &[u8] {
     // don't overflow the display ( 0xFFFFFFF)
-    if (n > 0xFFFFFF) || (n < -0xFFFFFF) {
-        return b"Err";
-    }
-    if n < 0 {
-        n = -n;
-        sign = true;
-    }
     if n == 0 {
         return b"0";
     }
@@ -560,10 +552,6 @@ fn hex_bytes(mut n: i32, buf: &mut [u8]) -> &[u8] {
             _ => b'?',
         };
         n /= 16;
-        i += 1;
-    }
-    if sign {
-        buf[i] = b'-';
         i += 1;
     }
     let slice = &mut buf[..i];
