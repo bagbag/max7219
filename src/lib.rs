@@ -231,37 +231,35 @@ where
     /// Writes a right justified integer with sign
     ///
     /// # Arguments
-    /// 
+    ///
     /// * `addr` - display to address as connected in series (0 -> last)
     /// * `val` - an integer i32
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// * `DataError` - returned in case there was an integer over flow
-    /// 
-    pub fn write_integer(&mut self, addr: usize, value: i32) -> Result<(), DataError>
-    {
+    ///
+    pub fn write_integer(&mut self, addr: usize, value: i32) -> Result<(), DataError> {
         let mut buf = [0u8; 8];
         let j = base_10_bytes(value, &mut buf);
         buf = pad_left(j);
         self.write_str(addr, &mut buf, 0b00000000)?;
         Ok(())
     }
-    
+
     ///
     /// Writes a right justified hex formatted integer with sign
     ///
     /// # Arguments
-    /// 
+    ///
     /// * `addr` - display to address as connected in series (0 -> last)
     /// * `val` - an integer i32
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// * `DataError` - returned in case there was an integer over flow
-    /// 
-    pub fn write_hex(&mut self, addr: usize, value: i32) -> Result<(), DataError>
-    {
+    ///
+    pub fn write_hex(&mut self, addr: usize, value: u32) -> Result<(), DataError> {
         let mut buf = [0u8; 8];
         let j = hex_bytes(value, &mut buf);
         buf = pad_left(j);
@@ -494,19 +492,19 @@ fn ssb_byte(b: u8, dot: bool) -> u8 {
 
 ///
 /// Convert the integer into an integer byte Sequence
-/// 
+///
 fn base_10_bytes(mut n: i32, buf: &mut [u8]) -> &[u8] {
     let mut sign: bool = false;
-    if n < 0 {
-        n = -n;
-        sign = true;
+    //don't overflow the display
+    if (n > 99999999) || (n < -9999999) {
+        return b"Err";
     }
     if n == 0 {
         return b"0";
     }
-    // don't overflow the display
-    if n >= 99999999 || n <= -999999 {
-        return b"Err";
+    if n < 0 {
+        n = -n;
+        sign = true;
     }
     let mut i = 0;
     while n > 0 {
@@ -523,27 +521,18 @@ fn base_10_bytes(mut n: i32, buf: &mut [u8]) -> &[u8] {
     &*slice
 }
 
-
 //
 /// Convert the integer into a hexidecimal byte Sequence
-/// 
-fn hex_bytes(mut n: i32, buf: &mut [u8]) -> &[u8] {
-    let mut sign: bool = false;
-    if n < 0 {
-        n = -n;
-        sign = true;
-    }
+///
+fn hex_bytes(mut n: u32 , buf: &mut [u8]) -> &[u8] {
+    // don't overflow the display ( 0xFFFFFFF)
     if n == 0 {
         return b"0";
     }
-    // don't overflow the display ( 0xFFFFFFF)
-    if n <= -268435455 {
-        return b"Err";
-    }
     let mut i = 0;
     while n > 0 {
-        let digit = (n % 16 ) as u8;
-        buf[i] =match digit { 
+        let digit = (n % 16) as u8;
+        buf[i] = match digit {
             0 => b'0',
             1 => b'1',
             2 => b'2',
@@ -560,13 +549,9 @@ fn hex_bytes(mut n: i32, buf: &mut [u8]) -> &[u8] {
             13 => b'd',
             14 => b'e',
             15 => b'f',
-            _ => b'?'
+            _ => b'?',
         };
         n /= 16;
-        i += 1;
-    }
-    if sign {
-        buf[i] = b'-';
         i += 1;
     }
     let slice = &mut buf[..i];
@@ -576,9 +561,9 @@ fn hex_bytes(mut n: i32, buf: &mut [u8]) -> &[u8] {
 
 ///
 /// Take a byte slice and pad the left hand side
-/// 
+///
 fn pad_left(val: &[u8]) -> [u8; 8] {
-    assert!(val.len() < 8);
+    assert!(val.len() <= 8);
     let size: usize = 8;
     let pos: usize = val.len();
     let mut cur: usize = 1;

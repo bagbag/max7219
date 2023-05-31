@@ -1,5 +1,9 @@
 # CHANGELOG
 
+### 0.4.1
+
+Fix edge cases for integer and buffer size for righ justification 
+
 ### 0.4.0
 
 Add support for integer display in decimal and hex for i32 
