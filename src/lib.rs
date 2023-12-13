@@ -285,13 +285,34 @@ where
 
         let mut digit: u8 = 1;
         for b in raw {
-            self.c.write_raw(addr, digit, *b)?;
+            self.write_raw_byte(addr, digit, *b)?;
             digit += 1;
         }
 
         self.set_decode_mode(0, prev_dm)?;
 
         Ok(())
+    }
+
+    ///
+    /// Writes a single byte to the underlying display.  This method is very
+    /// low-level: most users will prefer to use one of the other `write_*`
+    /// methods.
+    ///
+    ///
+    /// # Arguments
+    ///
+    /// * `addr` - display to address as connected in series (0 -> last)
+    /// * `header` - the register to write the value to
+    /// * `data` - the value to write
+    ///
+    /// # Errors
+    ///
+    /// * `DataError` - returned in case there was an error during data transfer
+    ///
+
+    pub fn write_raw_byte(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError> {
+        self.c.write_raw(addr, header, data)
     }
 
     ///
