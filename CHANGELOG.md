@@ -1,5 +1,9 @@
 # CHANGELOG
 
+### 0.4.2
+
+Add `write_raw_byte` to update display in smallest possible increment.
+
 ### 0.4.1
 
 Fix edge cases for integer and buffer size for righ justification 
