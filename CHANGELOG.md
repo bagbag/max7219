@@ -1,5 +1,11 @@
 # CHANGELOG
 
+### 0.5.0
+
+Specify rust edition to `2021`.
+Specify rust-version to `1.60`.
+Update `embedded-hal` dependency to `v1.0.0` (thanks [SmartBoy84](https://github.com/SmartBoy84))
+
 ### 0.4.2
 
 Add `write_raw_byte` to update display in smallest possible increment.

@@ -8,10 +8,8 @@
 #![deny(warnings)]
 #![no_std]
 
-extern crate embedded_hal;
-
-use embedded_hal::spi::SpiDevice;
 use embedded_hal::digital::OutputPin;
+use embedded_hal::spi::SpiDevice;
 
 pub mod connectors;
 use connectors::*;
@@ -203,9 +201,9 @@ where
     /// # Arguments
     ///
     /// * `addr` - display to address as connected in series (0 -> last)
-    /// * `bcd` - the bcd encoded string slice consisting of [0-9,-,E,L,H,P]
-    /// where upper case input for alphabetic characters results in dot being set.
-    /// Length of string is always 8 bytes, use spaces for blanking.
+    /// * `bcd`  - the bcd encoded string slice consisting of [0-9,-,E,L,H,P]
+    ///            where upper case input for alphabetic characters results in dot being set.
+    ///            Length of string is always 8 bytes, use spaces for blanking.
     ///
     /// # Errors
     ///
@@ -243,7 +241,7 @@ where
         let mut buf = [0u8; 8];
         let j = base_10_bytes(value, &mut buf);
         buf = pad_left(j);
-        self.write_str(addr, &mut buf, 0b00000000)?;
+        self.write_str(addr, &buf, 0b00000000)?;
         Ok(())
     }
 
@@ -263,7 +261,7 @@ where
         let mut buf = [0u8; 8];
         let j = hex_bytes(value, &mut buf);
         buf = pad_left(j);
-        self.write_str(addr, &mut buf, 0b00000000)?;
+        self.write_str(addr, &buf, 0b00000000)?;
         Ok(())
     }
 
@@ -310,7 +308,6 @@ where
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-
     pub fn write_raw_byte(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError> {
         self.c.write_raw(addr, header, data)
     }
@@ -517,7 +514,7 @@ fn ssb_byte(b: u8, dot: bool) -> u8 {
 fn base_10_bytes(mut n: i32, buf: &mut [u8]) -> &[u8] {
     let mut sign: bool = false;
     //don't overflow the display
-    if (n > 99999999) || (n < -9999999) {
+    if !(-9999999..99999999).contains(&n) {
         return b"Err";
     }
     if n == 0 {
@@ -545,7 +542,7 @@ fn base_10_bytes(mut n: i32, buf: &mut [u8]) -> &[u8] {
 //
 /// Convert the integer into a hexidecimal byte Sequence
 ///
-fn hex_bytes(mut n: u32 , buf: &mut [u8]) -> &[u8] {
+fn hex_bytes(mut n: u32, buf: &mut [u8]) -> &[u8] {
     // don't overflow the display ( 0xFFFFFFF)
     if n == 0 {
         return b"0";

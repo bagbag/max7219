@@ -1,7 +1,5 @@
-extern crate embedded_hal;
-
-use embedded_hal::spi::SpiDevice;
 use embedded_hal::digital::OutputPin;
+use embedded_hal::spi::SpiDevice;
 
 use crate::{Command, DataError, MAX_DISPLAYS};
 
