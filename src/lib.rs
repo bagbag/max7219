@@ -386,7 +386,7 @@ where
 
 impl<SPI> MAX7219<SpiConnector<SPI>>
 where
-    SPI: SpiDevice,
+    SPI: SpiDevice<u8>,
 {
     ///
     /// Construct a new MAX7219 driver instance from pre-existing SPI in full hardware mode.
@@ -411,7 +411,7 @@ where
 
 impl<SPI, CS> MAX7219<SpiConnectorSW<SPI, CS>>
 where
-    SPI: SpiDevice,
+    SPI: SpiDevice<u8>,
     CS: OutputPin,
 {
     ///

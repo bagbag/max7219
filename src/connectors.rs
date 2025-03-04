@@ -114,7 +114,7 @@ where
 
 pub struct SpiConnector<SPI>
 where
-    SPI: SpiDevice,
+    SPI: SpiDevice<u8>,
 {
     devices: usize,
     buffer: [u8; MAX_DISPLAYS * 2],
@@ -124,7 +124,7 @@ where
 /// Hardware controlled CS connector with SPI transfer
 impl<SPI> SpiConnector<SPI>
 where
-    SPI: SpiDevice,
+    SPI: SpiDevice<u8>,
 {
     pub(crate) fn new(displays: usize, spi: SPI) -> Self {
         SpiConnector {
@@ -137,7 +137,7 @@ where
 
 impl<SPI> Connector for SpiConnector<SPI>
 where
-    SPI: SpiDevice,
+    SPI: SpiDevice<u8>,
 {
     fn devices(&self) -> usize {
         self.devices
@@ -162,7 +162,7 @@ where
 /// Software controlled CS connector with SPI transfer
 pub struct SpiConnectorSW<SPI, CS>
 where
-    SPI: SpiDevice,
+    SPI: SpiDevice<u8>,
     CS: OutputPin,
 {
     spi_c: SpiConnector<SPI>,
@@ -171,7 +171,7 @@ where
 
 impl<SPI, CS> SpiConnectorSW<SPI, CS>
 where
-    SPI: SpiDevice,
+    SPI: SpiDevice<u8>,
     CS: OutputPin,
 {
     pub(crate) fn new(displays: usize, spi: SPI, cs: CS) -> Self {
@@ -184,7 +184,7 @@ where
 
 impl<SPI, CS> Connector for SpiConnectorSW<SPI, CS>
 where
-    SPI: SpiDevice,
+    SPI: SpiDevice<u8>,
     CS: OutputPin,
 {
     fn devices(&self) -> usize {
