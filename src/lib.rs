@@ -10,8 +10,8 @@
 
 extern crate embedded_hal;
 
-use embedded_hal::blocking::spi::Write;
-use embedded_hal::digital::v2::OutputPin;
+use embedded_hal::spi::SpiDevice;
+use embedded_hal::digital::OutputPin;
 
 pub mod connectors;
 use connectors::*;
@@ -386,7 +386,7 @@ where
 
 impl<SPI> MAX7219<SpiConnector<SPI>>
 where
-    SPI: Write<u8>,
+    SPI: SpiDevice<u8>,
 {
     ///
     /// Construct a new MAX7219 driver instance from pre-existing SPI in full hardware mode.
@@ -411,7 +411,7 @@ where
 
 impl<SPI, CS> MAX7219<SpiConnectorSW<SPI, CS>>
 where
-    SPI: Write<u8>,
+    SPI: SpiDevice<u8>,
     CS: OutputPin,
 {
     ///
