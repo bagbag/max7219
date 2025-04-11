@@ -9,7 +9,7 @@
 #![no_std]
 
 use embedded_hal::digital::OutputPin;
-use embedded_hal::spi::SpiDevice;
+use embedded_hal_async::spi::SpiDevice;
 
 pub mod connectors;
 use connectors::*;
@@ -83,9 +83,9 @@ where
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-    pub fn power_on(&mut self) -> Result<(), DataError> {
+    pub async fn power_on(&mut self) -> Result<(), DataError> {
         for i in 0..self.c.devices() {
-            self.c.write_data(i, Command::Power, 0x01)?;
+            self.c.write_data(i, Command::Power, 0x01).await?;
         }
 
         Ok(())
@@ -98,9 +98,9 @@ where
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-    pub fn power_off(&mut self) -> Result<(), DataError> {
+    pub async fn power_off(&mut self) -> Result<(), DataError> {
         for i in 0..self.c.devices() {
-            self.c.write_data(i, Command::Power, 0x00)?;
+            self.c.write_data(i, Command::Power, 0x00).await?;
         }
 
         Ok(())
@@ -117,9 +117,9 @@ where
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-    pub fn clear_display(&mut self, addr: usize) -> Result<(), DataError> {
+    pub async fn clear_display(&mut self, addr: usize) -> Result<(), DataError> {
         for i in 1..9 {
-            self.c.write_raw(addr, i, 0x00)?;
+            self.c.write_raw(addr, i, 0x00).await?;
         }
 
         Ok(())
@@ -137,8 +137,8 @@ where
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-    pub fn set_intensity(&mut self, addr: usize, intensity: u8) -> Result<(), DataError> {
-        self.c.write_data(addr, Command::Intensity, intensity)
+    pub async fn set_intensity(&mut self, addr: usize, intensity: u8) -> Result<(), DataError> {
+        self.c.write_data(addr, Command::Intensity, intensity).await
     }
 
     ///
@@ -153,9 +153,15 @@ where
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-    pub fn set_decode_mode(&mut self, addr: usize, mode: DecodeMode) -> Result<(), DataError> {
+    pub async fn set_decode_mode(
+        &mut self,
+        addr: usize,
+        mode: DecodeMode,
+    ) -> Result<(), DataError> {
         self.decode_mode = mode; // store what we set
-        self.c.write_data(addr, Command::DecodeMode, mode as u8)
+        self.c
+            .write_data(addr, Command::DecodeMode, mode as u8)
+            .await
     }
 
     ///
@@ -171,26 +177,26 @@ where
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-    pub fn write_str(
+    pub async fn write_str(
         &mut self,
         addr: usize,
         string: &[u8; MAX_DIGITS],
         dots: u8,
     ) -> Result<(), DataError> {
         let prev_dm = self.decode_mode;
-        self.set_decode_mode(0, DecodeMode::NoDecode)?;
+        self.set_decode_mode(0, DecodeMode::NoDecode).await?;
 
         let mut digit: u8 = MAX_DIGITS as u8;
         let mut dot_product: u8 = 0b1000_0000;
         for b in string {
             let dot = (dots & dot_product) > 0;
             dot_product >>= 1;
-            self.c.write_raw(addr, digit, ssb_byte(*b, dot))?;
+            self.c.write_raw(addr, digit, ssb_byte(*b, dot)).await?;
 
             digit -= 1;
         }
 
-        self.set_decode_mode(0, prev_dm)?;
+        self.set_decode_mode(0, prev_dm).await?;
 
         Ok(())
     }
@@ -209,18 +215,22 @@ where
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-    pub fn write_bcd(&mut self, addr: usize, bcd: &[u8; MAX_DIGITS]) -> Result<(), DataError> {
+    pub async fn write_bcd(
+        &mut self,
+        addr: usize,
+        bcd: &[u8; MAX_DIGITS],
+    ) -> Result<(), DataError> {
         let prev_dm = self.decode_mode;
-        self.set_decode_mode(0, DecodeMode::CodeBDigits7_0)?;
+        self.set_decode_mode(0, DecodeMode::CodeBDigits7_0).await?;
 
         let mut digit: u8 = MAX_DIGITS as u8;
         for b in bcd {
-            self.c.write_raw(addr, digit, bcd_byte(*b))?;
+            self.c.write_raw(addr, digit, bcd_byte(*b)).await?;
 
             digit -= 1;
         }
 
-        self.set_decode_mode(0, prev_dm)?;
+        self.set_decode_mode(0, prev_dm).await?;
 
         Ok(())
     }
@@ -237,11 +247,11 @@ where
     ///
     /// * `DataError` - returned in case there was an integer over flow
     ///
-    pub fn write_integer(&mut self, addr: usize, value: i32) -> Result<(), DataError> {
+    pub async fn write_integer(&mut self, addr: usize, value: i32) -> Result<(), DataError> {
         let mut buf = [0u8; 8];
         let j = base_10_bytes(value, &mut buf);
         buf = pad_left(j);
-        self.write_str(addr, &buf, 0b00000000)?;
+        self.write_str(addr, &buf, 0b00000000).await?;
         Ok(())
     }
 
@@ -257,11 +267,11 @@ where
     ///
     /// * `DataError` - returned in case there was an integer over flow
     ///
-    pub fn write_hex(&mut self, addr: usize, value: u32) -> Result<(), DataError> {
+    pub async fn write_hex(&mut self, addr: usize, value: u32) -> Result<(), DataError> {
         let mut buf = [0u8; 8];
         let j = hex_bytes(value, &mut buf);
         buf = pad_left(j);
-        self.write_str(addr, &buf, 0b00000000)?;
+        self.write_str(addr, &buf, 0b00000000).await?;
         Ok(())
     }
 
@@ -277,17 +287,21 @@ where
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-    pub fn write_raw(&mut self, addr: usize, raw: &[u8; MAX_DIGITS]) -> Result<(), DataError> {
+    pub async fn write_raw(
+        &mut self,
+        addr: usize,
+        raw: &[u8; MAX_DIGITS],
+    ) -> Result<(), DataError> {
         let prev_dm = self.decode_mode;
-        self.set_decode_mode(0, DecodeMode::NoDecode)?;
+        self.set_decode_mode(0, DecodeMode::NoDecode).await?;
 
         let mut digit: u8 = 1;
         for b in raw {
-            self.write_raw_byte(addr, digit, *b)?;
+            self.write_raw_byte(addr, digit, *b).await?;
             digit += 1;
         }
 
-        self.set_decode_mode(0, prev_dm)?;
+        self.set_decode_mode(0, prev_dm).await?;
 
         Ok(())
     }
@@ -308,8 +322,13 @@ where
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-    pub fn write_raw_byte(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError> {
-        self.c.write_raw(addr, header, data)
+    pub async fn write_raw_byte(
+        &mut self,
+        addr: usize,
+        header: u8,
+        data: u8,
+    ) -> Result<(), DataError> {
+        self.c.write_raw(addr, header, data).await
     }
 
     ///
@@ -324,33 +343,30 @@ where
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-    pub fn test(&mut self, addr: usize, is_on: bool) -> Result<(), DataError> {
+    pub async fn test(&mut self, addr: usize, is_on: bool) -> Result<(), DataError> {
         if is_on {
-            self.c.write_data(addr, Command::DisplayTest, 0x01)
+            self.c.write_data(addr, Command::DisplayTest, 0x01).await
         } else {
-            self.c.write_data(addr, Command::DisplayTest, 0x00)
+            self.c.write_data(addr, Command::DisplayTest, 0x00).await
         }
     }
 
     // internal constructor, users should call ::from_pins or ::from_spi
     fn new(connector: CONNECTOR) -> Result<Self, DataError> {
-        let mut max7219 = MAX7219 {
+        Ok(MAX7219 {
             c: connector,
             decode_mode: DecodeMode::NoDecode,
-        };
-
-        max7219.init()?;
-        Ok(max7219)
+        })
     }
 
-    fn init(&mut self) -> Result<(), DataError> {
+    pub async fn init(&mut self) -> Result<(), DataError> {
         for i in 0..self.c.devices() {
-            self.test(i, false)?; // turn testmode off
-            self.c.write_data(i, Command::ScanLimit, 0x07)?; // set scanlimit
-            self.set_decode_mode(i, DecodeMode::NoDecode)?; // direct decode
-            self.clear_display(i)?; // clear all digits
+            self.test(i, false).await?; // turn testmode off
+            self.c.write_data(i, Command::ScanLimit, 0x07).await?; // set scanlimit
+            self.set_decode_mode(i, DecodeMode::NoDecode).await?; // direct decode
+            self.clear_display(i).await?; // clear all digits
         }
-        self.power_off()?; // power off
+        self.power_off().await?; // power off
 
         Ok(())
     }

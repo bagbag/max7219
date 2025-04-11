@@ -1,5 +1,5 @@
 use embedded_hal::digital::OutputPin;
-use embedded_hal::spi::SpiDevice;
+use embedded_hal_async::spi::SpiDevice;
 
 use crate::{Command, DataError, MAX_DISPLAYS};
 
@@ -20,8 +20,13 @@ pub trait Connector {
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-    fn write_data(&mut self, addr: usize, command: Command, data: u8) -> Result<(), DataError> {
-        self.write_raw(addr, command as u8, data)
+    async fn write_data(
+        &mut self,
+        addr: usize,
+        command: Command,
+        data: u8,
+    ) -> Result<(), DataError> {
+        self.write_raw(addr, command as u8, data).await
     }
 
     ///
@@ -37,7 +42,7 @@ pub trait Connector {
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError>;
+    async fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError>;
 }
 
 /// Direct GPIO pins connector
@@ -81,7 +86,7 @@ where
         self.devices
     }
 
-    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError> {
+    async fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError> {
         let offset = addr * 2;
         let max_bytes = self.devices * 2;
         self.buffer = [0; MAX_DISPLAYS * 2];
@@ -141,7 +146,7 @@ where
         self.devices
     }
 
-    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError> {
+    async fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError> {
         let offset = addr * 2;
         let max_bytes = self.devices * 2;
         self.buffer = [0; MAX_DISPLAYS * 2];
@@ -151,6 +156,7 @@ where
 
         self.spi
             .write(&self.buffer[0..max_bytes])
+            .await
             .map_err(|_| DataError::Spi)?;
 
         Ok(())
@@ -189,10 +195,11 @@ where
         self.spi_c.devices
     }
 
-    fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError> {
+    async fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError> {
         self.cs.set_low().map_err(|_| DataError::Pin)?;
         self.spi_c
             .write_raw(addr, header, data)
+            .await
             .map_err(|_| DataError::Spi)?;
         self.cs.set_high().map_err(|_| DataError::Pin)?;
 
