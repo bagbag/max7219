@@ -402,6 +402,23 @@ where
         self.write_raw_byte(addr, command as u8, data).await
     }
 
+    ///
+    /// Writes data to all displays to given register as described by command
+    ///
+    /// # Arguments
+    ///
+    /// * `command` - the command/register on the display to write to
+    /// * `data` - the data byte value to write
+    ///
+    /// # Errors
+    ///
+    /// * `DataError` - returned in case there was an error during data transfer
+    ///
+    #[inline]
+    pub async fn write_command_all(&mut self, command: Command, data: u8) -> Result<(), DataError> {
+        self.write_raw_byte_all(command as u8, data).await
+    }
+
     pub async fn write_raw_byte(
         &mut self,
         addr: usize,
