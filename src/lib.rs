@@ -316,7 +316,7 @@ where
         raw: &[u8; MAX_DIGITS],
     ) -> Result<(), DataError> {
         let prev_dm = self.decode_mode;
-        self.set_decode_mode(0, DecodeMode::NoDecode).await?;
+        self.set_decode_mode(addr, DecodeMode::NoDecode).await?;
 
         let mut digit: u8 = 1;
         for b in raw {
@@ -324,9 +324,21 @@ where
             digit += 1;
         }
 
-        self.set_decode_mode(0, prev_dm).await?;
+        self.set_decode_mode(addr, prev_dm).await?;
 
         Ok(())
+    }
+
+    pub async fn write_line(&mut self, line: &[u8]) -> Result<(), DataError> {
+        let mut buffers = [[0; 2]; D];
+        let buffer = buffers.as_flattened_mut();
+
+        for display in 0..D {
+            buffer[display * 2] = line[display];
+            buffer[display * 2 + 1] = 0x00;
+        }
+
+        self.write_raw_bytes(buffer).await
     }
 
     ///
@@ -347,11 +359,11 @@ where
     }
 
     // internal constructor, users should call ::from_pins or ::from_spi
-    fn new(connector: CONNECTOR) -> Result<Self, DataError> {
-        Ok(MAX7219 {
+    fn new(connector: CONNECTOR) -> Self {
+        MAX7219 {
             connector,
             decode_mode: DecodeMode::NoDecode,
-        })
+        }
     }
 
     pub async fn init(&mut self) -> Result<(), DataError> {
@@ -406,6 +418,13 @@ where
         self.write_raw_bytes(buffer).await
     }
 
+    pub async fn write_raw_byte_all(&mut self, header: u8, data: u8) -> Result<(), DataError> {
+        let mut buffers = [[header, data]; D];
+        let buffer = buffers.as_flattened_mut();
+
+        self.write_raw_bytes(buffer).await
+    }
+
     ///
     /// Writes data to given register as described by command
     ///
@@ -445,7 +464,7 @@ where
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-    pub fn from_pins(data: DATA, cs: CS, sck: SCK) -> Result<Self, DataError> {
+    pub fn from_pins(data: DATA, cs: CS, sck: SCK) -> Self {
         MAX7219::new(PinConnector::new(data, cs, sck))
     }
 }
@@ -470,7 +489,7 @@ where
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-    pub fn from_spi(spi: SPI) -> Result<Self, DataError> {
+    pub fn from_spi(spi: SPI) -> Self {
         MAX7219::new(SpiConnector::new(spi))
     }
 }
@@ -497,7 +516,7 @@ where
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-    pub fn from_spi_cs(spi: SPI, cs: CS) -> Result<Self, DataError> {
+    pub fn from_spi_cs(spi: SPI, cs: CS) -> Self {
         MAX7219::new(SpiConnectorSW::new(spi, cs))
     }
 }
