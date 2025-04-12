@@ -1,5 +1,5 @@
 [package]
-edition = "2021"
+edition = "2024"
 authors = ["Maikel Wever <maikel@maikelwever.nl>", "Ales Katona <ales@katona.me>"]
 categories = ["embedded", "hardware-support", "no-std"]
 readme = "README.md"

@@ -5,7 +5,6 @@
 //! [`embedded-hal`]: https://docs.rs/embedded-hal/~0.2
 
 #![deny(unsafe_code)]
-#![deny(warnings)]
 #![no_std]
 
 use embedded_hal::digital::OutputPin;
@@ -14,14 +13,12 @@ use embedded_hal_async::spi::SpiDevice;
 pub mod connectors;
 use connectors::*;
 
-/// Maximum number of displays connected in series supported by this lib.
-const MAX_DISPLAYS: usize = 8;
-
 /// Digits per display
 const MAX_DIGITS: usize = 8;
 
 /// Possible command register values on the display chip.
 #[derive(Clone, Copy)]
+#[repr(u8)]
 pub enum Command {
     Noop = 0x00,
     Digit0 = 0x01,
@@ -40,7 +37,8 @@ pub enum Command {
 }
 
 /// Decode modes for BCD encoded input.
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[repr(u8)]
 pub enum DecodeMode {
     NoDecode = 0x00,
     CodeBDigit0 = 0x01,
@@ -67,12 +65,12 @@ pub enum DataError {
 /// a single connection. The actual connection interface
 /// is selected via constructor functions.
 ///
-pub struct MAX7219<CONNECTOR> {
-    c: CONNECTOR,
+pub struct MAX7219<const D: usize, CONNECTOR> {
+    connector: CONNECTOR,
     decode_mode: DecodeMode,
 }
 
-impl<CONNECTOR> MAX7219<CONNECTOR>
+impl<const D: usize, CONNECTOR> MAX7219<D, CONNECTOR>
 where
     CONNECTOR: Connector,
 {
@@ -84,8 +82,8 @@ where
     /// * `DataError` - returned in case there was an error during data transfer
     ///
     pub async fn power_on(&mut self) -> Result<(), DataError> {
-        for i in 0..self.c.devices() {
-            self.c.write_data(i, Command::Power, 0x01).await?;
+        for i in 0..D {
+            self.write_command(i, Command::Power, 0x01).await?;
         }
 
         Ok(())
@@ -99,8 +97,8 @@ where
     /// * `DataError` - returned in case there was an error during data transfer
     ///
     pub async fn power_off(&mut self) -> Result<(), DataError> {
-        for i in 0..self.c.devices() {
-            self.c.write_data(i, Command::Power, 0x00).await?;
+        for i in 0..D {
+            self.write_command(i, Command::Power, 0x00).await?;
         }
 
         Ok(())
@@ -119,10 +117,31 @@ where
     ///
     pub async fn clear_display(&mut self, addr: usize) -> Result<(), DataError> {
         for i in 1..9 {
-            self.c.write_raw(addr, i, 0x00).await?;
+            self.write_raw_byte(addr, i, 0x00).await?;
         }
 
         Ok(())
+    }
+
+    ///
+    /// Clears all displays by settings all digits to empty
+    ///
+    /// # Errors
+    ///
+    /// * `DataError` - returned in case there was an error during data transfer
+    ///
+    pub async fn clear_all_displays(&mut self) -> Result<(), DataError> {
+        let mut buffers = [[0; 2]; D];
+        let buffer = buffers.as_flattened_mut();
+
+        for digit in 1..9 {
+            for display in 0..D {
+                buffer[display * 2] = digit;
+                buffer[display * 2 + 1] = 0x00;
+            }
+        }
+
+        self.write_raw_bytes(buffer).await
     }
 
     ///
@@ -138,7 +157,8 @@ where
     /// * `DataError` - returned in case there was an error during data transfer
     ///
     pub async fn set_intensity(&mut self, addr: usize, intensity: u8) -> Result<(), DataError> {
-        self.c.write_data(addr, Command::Intensity, intensity).await
+        self.write_command(addr, Command::Intensity, intensity)
+            .await
     }
 
     ///
@@ -158,10 +178,13 @@ where
         addr: usize,
         mode: DecodeMode,
     ) -> Result<(), DataError> {
-        self.decode_mode = mode; // store what we set
-        self.c
-            .write_data(addr, Command::DecodeMode, mode as u8)
-            .await
+        if self.decode_mode != mode {
+            self.decode_mode = mode;
+            self.write_command(addr, Command::DecodeMode, mode as u8)
+                .await?;
+        }
+
+        Ok(())
     }
 
     ///
@@ -191,7 +214,7 @@ where
         for b in string {
             let dot = (dots & dot_product) > 0;
             dot_product >>= 1;
-            self.c.write_raw(addr, digit, ssb_byte(*b, dot)).await?;
+            self.write_raw_byte(addr, digit, ssb_byte(*b, dot)).await?;
 
             digit -= 1;
         }
@@ -225,7 +248,7 @@ where
 
         let mut digit: u8 = MAX_DIGITS as u8;
         for b in bcd {
-            self.c.write_raw(addr, digit, bcd_byte(*b)).await?;
+            self.write_raw_byte(addr, digit, bcd_byte(*b)).await?;
 
             digit -= 1;
         }
@@ -287,7 +310,7 @@ where
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-    pub async fn write_raw(
+    pub async fn write_digits(
         &mut self,
         addr: usize,
         raw: &[u8; MAX_DIGITS],
@@ -307,31 +330,6 @@ where
     }
 
     ///
-    /// Writes a single byte to the underlying display.  This method is very
-    /// low-level: most users will prefer to use one of the other `write_*`
-    /// methods.
-    ///
-    ///
-    /// # Arguments
-    ///
-    /// * `addr` - display to address as connected in series (0 -> last)
-    /// * `header` - the register to write the value to
-    /// * `data` - the value to write
-    ///
-    /// # Errors
-    ///
-    /// * `DataError` - returned in case there was an error during data transfer
-    ///
-    pub async fn write_raw_byte(
-        &mut self,
-        addr: usize,
-        header: u8,
-        data: u8,
-    ) -> Result<(), DataError> {
-        self.c.write_raw(addr, header, data).await
-    }
-
-    ///
     /// Set test mode on/off
     ///
     /// # Arguments
@@ -344,35 +342,90 @@ where
     /// * `DataError` - returned in case there was an error during data transfer
     ///
     pub async fn test(&mut self, addr: usize, is_on: bool) -> Result<(), DataError> {
-        if is_on {
-            self.c.write_data(addr, Command::DisplayTest, 0x01).await
-        } else {
-            self.c.write_data(addr, Command::DisplayTest, 0x00).await
-        }
+        self.write_command(addr, Command::DisplayTest, is_on as u8)
+            .await
     }
 
     // internal constructor, users should call ::from_pins or ::from_spi
     fn new(connector: CONNECTOR) -> Result<Self, DataError> {
         Ok(MAX7219 {
-            c: connector,
+            connector,
             decode_mode: DecodeMode::NoDecode,
         })
     }
 
     pub async fn init(&mut self) -> Result<(), DataError> {
-        for i in 0..self.c.devices() {
-            self.test(i, false).await?; // turn testmode off
-            self.c.write_data(i, Command::ScanLimit, 0x07).await?; // set scanlimit
-            self.set_decode_mode(i, DecodeMode::NoDecode).await?; // direct decode
-            self.clear_display(i).await?; // clear all digits
+        for i in 0..D {
+            self.test(i, false).await?;
+            self.write_command(i, Command::ScanLimit, 0x07).await?;
+            self.set_decode_mode(i, DecodeMode::NoDecode).await?;
+            self.clear_display(i).await?;
         }
-        self.power_off().await?; // power off
+
+        self.power_off().await?;
 
         Ok(())
     }
+
+    ///
+    /// Writes data to given register as described by command
+    ///
+    /// # Arguments
+    ///
+    /// * `addr` - display to address as connected in series (0 -> last)
+    /// * `command` - the command/register on the display to write to
+    /// * `data` - the data byte value to write
+    ///
+    /// # Errors
+    ///
+    /// * `DataError` - returned in case there was an error during data transfer
+    ///
+    #[inline]
+    pub async fn write_command(
+        &mut self,
+        addr: usize,
+        command: Command,
+        data: u8,
+    ) -> Result<(), DataError> {
+        self.write_raw_byte(addr, command as u8, data).await
+    }
+
+    pub async fn write_raw_byte(
+        &mut self,
+        addr: usize,
+        header: u8,
+        data: u8,
+    ) -> Result<(), DataError> {
+        let offset = addr * 2;
+        let mut buffers = [[0; 2]; D];
+        let buffer = buffers.as_flattened_mut();
+
+        buffer[offset] = header;
+        buffer[offset + 1] = data;
+
+        self.write_raw_bytes(buffer).await
+    }
+
+    ///
+    /// Writes data to given register as described by command
+    ///
+    /// # Arguments
+    ///
+    /// * `addr` - display to address as connected in series (0 -> last)
+    /// * `header` - the command/register on the display to write to as u8
+    /// * `data` - the data byte value to write
+    ///
+    /// # Errors
+    ///
+    /// * `DataError` - returned in case there was an error during data transfer
+    ///
+    #[inline]
+    pub async fn write_raw_bytes(&mut self, buffer: &[u8]) -> Result<(), DataError> {
+        self.connector.write_raw_bytes(buffer).await
+    }
 }
 
-impl<DATA, CS, SCK> MAX7219<PinConnector<DATA, CS, SCK>>
+impl<const D: usize, DATA, CS, SCK> MAX7219<D, PinConnector<DATA, CS, SCK>>
 where
     DATA: OutputPin,
     CS: OutputPin,
@@ -392,12 +445,12 @@ where
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-    pub fn from_pins(displays: usize, data: DATA, cs: CS, sck: SCK) -> Result<Self, DataError> {
-        MAX7219::new(PinConnector::new(displays, data, cs, sck))
+    pub fn from_pins(data: DATA, cs: CS, sck: SCK) -> Result<Self, DataError> {
+        MAX7219::new(PinConnector::new(data, cs, sck))
     }
 }
 
-impl<SPI> MAX7219<SpiConnector<SPI>>
+impl<const D: usize, SPI> MAX7219<D, SpiConnector<SPI>>
 where
     SPI: SpiDevice<u8>,
 {
@@ -417,12 +470,12 @@ where
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-    pub fn from_spi(displays: usize, spi: SPI) -> Result<Self, DataError> {
-        MAX7219::new(SpiConnector::new(displays, spi))
+    pub fn from_spi(spi: SPI) -> Result<Self, DataError> {
+        MAX7219::new(SpiConnector::new(spi))
     }
 }
 
-impl<SPI, CS> MAX7219<SpiConnectorSW<SPI, CS>>
+impl<const D: usize, SPI, CS> MAX7219<D, SpiConnectorSW<SPI, CS>>
 where
     SPI: SpiDevice<u8>,
     CS: OutputPin,
@@ -444,8 +497,8 @@ where
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-    pub fn from_spi_cs(displays: usize, spi: SPI, cs: CS) -> Result<Self, DataError> {
-        MAX7219::new(SpiConnectorSW::new(displays, spi, cs))
+    pub fn from_spi_cs(spi: SPI, cs: CS) -> Result<Self, DataError> {
+        MAX7219::new(SpiConnectorSW::new(spi, cs))
     }
 }
 

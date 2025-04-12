@@ -1,48 +1,18 @@
 use embedded_hal::digital::OutputPin;
 use embedded_hal_async::spi::SpiDevice;
 
-use crate::{Command, DataError, MAX_DISPLAYS};
+use crate::DataError;
 
 /// Describes the interface used to connect to the MX7219
 pub trait Connector {
-    fn devices(&self) -> usize;
-
     ///
-    /// Writes data to given register as described by command
-    ///
-    /// # Arguments
-    ///
-    /// * `addr` - display to address as connected in series (0 -> last)
-    /// * `command` - the command/register on the display to write to
-    /// * `data` - the data byte value to write
+    /// Writes raw bytes
     ///
     /// # Errors
     ///
     /// * `DataError` - returned in case there was an error during data transfer
     ///
-    async fn write_data(
-        &mut self,
-        addr: usize,
-        command: Command,
-        data: u8,
-    ) -> Result<(), DataError> {
-        self.write_raw(addr, command as u8, data).await
-    }
-
-    ///
-    /// Writes data to given register as described by command
-    ///
-    /// # Arguments
-    ///
-    /// * `addr` - display to address as connected in series (0 -> last)
-    /// * `header` - the command/register on the display to write to as u8
-    /// * `data` - the data byte value to write
-    ///
-    /// # Errors
-    ///
-    /// * `DataError` - returned in case there was an error during data transfer
-    ///
-    async fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError>;
+    async fn write_raw_bytes(&mut self, bytes: &[u8]) -> Result<(), DataError>;
 }
 
 /// Direct GPIO pins connector
@@ -52,8 +22,6 @@ where
     CS: OutputPin,
     SCK: OutputPin,
 {
-    devices: usize,
-    buffer: [u8; MAX_DISPLAYS * 2],
     data: DATA,
     cs: CS,
     sck: SCK,
@@ -65,14 +33,8 @@ where
     CS: OutputPin,
     SCK: OutputPin,
 {
-    pub(crate) fn new(displays: usize, data: DATA, cs: CS, sck: SCK) -> Self {
-        PinConnector {
-            devices: displays,
-            buffer: [0; MAX_DISPLAYS * 2],
-            data,
-            cs,
-            sck,
-        }
+    pub(crate) fn new(data: DATA, cs: CS, sck: SCK) -> Self {
+        PinConnector { data, cs, sck }
     }
 }
 
@@ -82,24 +44,11 @@ where
     CS: OutputPin,
     SCK: OutputPin,
 {
-    fn devices(&self) -> usize {
-        self.devices
-    }
-
-    async fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError> {
-        let offset = addr * 2;
-        let max_bytes = self.devices * 2;
-        self.buffer = [0; MAX_DISPLAYS * 2];
-
-        self.buffer[offset] = header;
-        self.buffer[offset + 1] = data;
-
+    async fn write_raw_bytes(&mut self, bytes: &[u8]) -> Result<(), DataError> {
         self.cs.set_low().map_err(|_| DataError::Pin)?;
-        for b in 0..max_bytes {
-            let value = self.buffer[b];
-
+        for byte in bytes {
             for i in 0..8 {
-                if value & (1 << (7 - i)) > 0 {
+                if byte & (1 << (7 - i)) > 0 {
                     self.data.set_high().map_err(|_| DataError::Pin)?;
                 } else {
                     self.data.set_low().map_err(|_| DataError::Pin)?;
@@ -119,8 +68,6 @@ pub struct SpiConnector<SPI>
 where
     SPI: SpiDevice<u8>,
 {
-    devices: usize,
-    buffer: [u8; MAX_DISPLAYS * 2],
     spi: SPI,
 }
 
@@ -129,12 +76,8 @@ impl<SPI> SpiConnector<SPI>
 where
     SPI: SpiDevice<u8>,
 {
-    pub(crate) fn new(displays: usize, spi: SPI) -> Self {
-        SpiConnector {
-            devices: displays,
-            buffer: [0; MAX_DISPLAYS * 2],
-            spi,
-        }
+    pub(crate) fn new(spi: SPI) -> Self {
+        SpiConnector { spi }
     }
 }
 
@@ -142,23 +85,8 @@ impl<SPI> Connector for SpiConnector<SPI>
 where
     SPI: SpiDevice<u8>,
 {
-    fn devices(&self) -> usize {
-        self.devices
-    }
-
-    async fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError> {
-        let offset = addr * 2;
-        let max_bytes = self.devices * 2;
-        self.buffer = [0; MAX_DISPLAYS * 2];
-
-        self.buffer[offset] = header;
-        self.buffer[offset + 1] = data;
-
-        self.spi
-            .write(&self.buffer[0..max_bytes])
-            .await
-            .map_err(|_| DataError::Spi)?;
-
+    async fn write_raw_bytes(&mut self, bytes: &[u8]) -> Result<(), DataError> {
+        self.spi.write(bytes).await.map_err(|_| DataError::Spi)?;
         Ok(())
     }
 }
@@ -178,9 +106,9 @@ where
     SPI: SpiDevice<u8>,
     CS: OutputPin,
 {
-    pub(crate) fn new(displays: usize, spi: SPI, cs: CS) -> Self {
+    pub(crate) fn new(spi: SPI, cs: CS) -> Self {
         SpiConnectorSW {
-            spi_c: SpiConnector::new(displays, spi),
+            spi_c: SpiConnector::new(spi),
             cs,
         }
     }
@@ -191,14 +119,10 @@ where
     SPI: SpiDevice<u8>,
     CS: OutputPin,
 {
-    fn devices(&self) -> usize {
-        self.spi_c.devices
-    }
-
-    async fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError> {
+    async fn write_raw_bytes(&mut self, bytes: &[u8]) -> Result<(), DataError> {
         self.cs.set_low().map_err(|_| DataError::Pin)?;
         self.spi_c
-            .write_raw(addr, header, data)
+            .write_raw_bytes(bytes)
             .await
             .map_err(|_| DataError::Spi)?;
         self.cs.set_high().map_err(|_| DataError::Pin)?;
